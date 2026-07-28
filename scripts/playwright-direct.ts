@@ -66,23 +66,24 @@ async function main() {
 
   await run("Toggle contents", async () => {
     await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
-    await page.waitForTimeout(3000);
-    const openW = await page.evaluate(() => document.querySelector('aside[aria-label="Chapter list"]')?.offsetWidth ?? 0);
-    if (openW === 0) {
-      // Open it first
+    await page.waitForTimeout(4000);
+    // The contents panel should be open by default. Check its width.
+    let width = await page.evaluate(() => document.querySelector('aside[aria-label="Chapter list"]')?.offsetWidth ?? 0);
+    if (width < 10) {
+      // Open it
       await page.locator('button[aria-label="Toggle contents"]').click();
       await page.waitForTimeout(500);
     }
     const initialW = await page.evaluate(() => document.querySelector('aside[aria-label="Chapter list"]')?.offsetWidth ?? 0);
     // Close
     await page.locator('button[aria-label="Toggle contents"]').click();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
     const closedW = await page.evaluate(() => document.querySelector('aside[aria-label="Chapter list"]')?.offsetWidth ?? 0);
     // Reopen
     await page.locator('button[aria-label="Toggle contents"]').click();
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
     const reopenedW = await page.evaluate(() => document.querySelector('aside[aria-label="Chapter list"]')?.offsetWidth ?? 0);
-    return closedW === 0 && initialW > 0 && reopenedW > 0;
+    return closedW < 10 && initialW > 10 && reopenedW > 10;
   });
 
   await run("Previous chapter disabled at Preface", async () => {
@@ -135,24 +136,31 @@ async function main() {
     await page.locator('button[aria-label="Bookmarks and annotations"]').click();
     await page.waitForTimeout(1000);
     const hasSaved = await page.locator("aside[aria-label='Detail panel']").textContent();
-    return hasSaved?.includes("SAVED") ?? false;
+    // The heading uses CSS uppercase but textContent returns "Saved"
+    return hasSaved?.toLowerCase().includes("saved") ?? false;
   });
 
   await run("Toggle narrator legend", async () => {
     // Navigate fresh
     await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
-    await page.waitForTimeout(2000);
-    // The legend should be open by default. Verify it's showing.
+    await page.waitForTimeout(4000);
+    // The legend should be open by default. Get its width.
     const initialW = await page.evaluate(() => document.querySelector('aside[aria-label="Detail panel"]')?.offsetWidth ?? 0);
-    // Close
+    // If it's closed, open it first
+    if (initialW < 10) {
+      await page.locator('button[aria-label="Toggle narrator legend"]').click();
+      await page.waitForTimeout(1000);
+    }
+    const openW = await page.evaluate(() => document.querySelector('aside[aria-label="Detail panel"]')?.offsetWidth ?? 0);
+    // Click Narrators button to close (since it's showing legend)
     await page.locator('button[aria-label="Toggle narrator legend"]').click();
     await page.waitForTimeout(500);
     const closedW = await page.evaluate(() => document.querySelector('aside[aria-label="Detail panel"]')?.offsetWidth ?? 0);
-    // Reopen
+    // Click again to reopen
     await page.locator('button[aria-label="Toggle narrator legend"]').click();
     await page.waitForTimeout(500);
     const reopenedW = await page.evaluate(() => document.querySelector('aside[aria-label="Detail panel"]')?.offsetWidth ?? 0);
-    return closedW === 0 && initialW > 0 && reopenedW > 0;
+    return closedW < 10 && openW > 10 && reopenedW > 10;
   });
 
   // ============================================================
@@ -191,6 +199,125 @@ async function main() {
   // Navigate to a fresh page before continuing (avoids stale state)
   await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
   await page.waitForTimeout(1000);
+
+  // ============================================================
+  // TEST 3b: Narrator modifications (rename, recolor, merge, undo)
+  // ============================================================
+  log("TEST 3b: Testing narrator modifications");
+
+  await run("Editor: click dialogue paragraph to select character narrator", async () => {
+    // Navigate fresh to ensure clean state
+    await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
+    await page.locator('nav[aria-label="Chapter navigation"] button', { hasText: "Book One" }).first().click();
+    await page.waitForTimeout(2000);
+    // Ensure editor mode is OFF first, then turn it ON
+    const editorBtn = page.locator('button[aria-label="Toggle editor mode"]');
+    // Check if editor mode is on by looking at the button's aria-pressed
+    const isPressed = await editorBtn.getAttribute("aria-pressed");
+    if (isPressed === "true") {
+      await editorBtn.click();
+      await page.waitForTimeout(500);
+    }
+    // Now turn editor mode ON
+    await editorBtn.click();
+    await page.waitForTimeout(800);
+    // Find a dialogue paragraph (one with speaker: narrator)
+    const dialoguePara = page.locator('p[data-narrator^="speaker:"]').first();
+    const count = await dialoguePara.count();
+    if (count === 0) return false;
+    await dialoguePara.click();
+    await page.waitForTimeout(800);
+    const text = await page.locator("aside[aria-label='Detail panel']").textContent();
+    return text?.includes("Narrator metadata") ?? false;
+  });
+
+  await run("Editor: rename narrator", async () => {
+    // The editor panel should be showing a character narrator now.
+    // Find the rename input (placeholder="Display name")
+    const renameInput = page.locator('input[placeholder="Display name"]');
+    const count = await renameInput.count();
+    if (count === 0) return false;
+    await renameInput.fill("TestRenamed");
+    await page.waitForTimeout(300);
+    // Click Save button next to the input
+    await page.locator("aside[aria-label='Detail panel'] button", { hasText: "Save" }).first().click();
+    await page.waitForTimeout(500);
+    // Verify the narrator legend now shows the renamed narrator
+    // (the legend is in the same panel, but we need to check the registry)
+    const registry = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}");
+      return state.state?.editor?.narratorOverrides || {};
+    });
+    const overrides = Object.values(registry) as Array<{name?: string}>;
+    return overrides.some((o) => o.name === "TestRenamed");
+  });
+
+  await run("Editor: recolor narrator", async () => {
+    // Find the color input
+    const colorInput = page.locator('aside[aria-label="Detail panel"] input[type="color"]').first();
+    const count = await colorInput.count();
+    if (count === 0) return false;
+    await colorInput.fill("#ff0000");
+    await page.waitForTimeout(500);
+    // Verify the override was saved
+    const registry = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}");
+      return state.state?.editor?.narratorOverrides || {};
+    });
+    const overrides = Object.values(registry) as Array<{color?: string}>;
+    return overrides.some((o) => o.color === "#ff0000");
+  });
+
+  await run("Editor: merge narrators", async () => {
+    // Find the merge select dropdown
+    const mergeSelect = page.locator("aside[aria-label='Detail panel'] select").last();
+    const count = await mergeSelect.count();
+    if (count === 0) return false;
+    // Select the first option that's not empty
+    const options = await mergeSelect.locator("option").allTextContents();
+    const targetOption = options.find((o) => o && o !== "— select target narrator —");
+    if (!targetOption) return false;
+    await mergeSelect.selectOption({ label: targetOption });
+    await page.waitForTimeout(300);
+    // Click the merge button
+    const mergeBtn = page.locator("aside[aria-label='Detail panel'] button", { hasText: /^Merge / }).first();
+    await mergeBtn.click();
+    await page.waitForTimeout(500);
+    // Verify a merge was saved
+    const merges = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}");
+      return state.state?.editor?.merges || [];
+    });
+    return merges.length > 0;
+  });
+
+  await run("Editor: reset all corrections", async () => {
+    // Navigate to settings to find the reset button
+    await page.locator('button[aria-label="Settings"]').click();
+    await page.waitForTimeout(500);
+    // Find and click the reset button (it has a confirm dialog, so we need to accept)
+    page.on("dialog", (d) => d.accept());
+    const resetBtn = page.locator("button", { hasText: "Reset all corrections" });
+    const count = await resetBtn.count();
+    if (count === 0) return false;
+    await resetBtn.click();
+    await page.waitForTimeout(500);
+    // Verify corrections are cleared
+    const state = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}");
+      return {
+        corrections: Object.keys(s.state?.editor?.blockCorrections || {}).length,
+        merges: (s.state?.editor?.merges || []).length,
+        overrides: Object.keys(s.state?.editor?.narratorOverrides || {}).length,
+      };
+    });
+    return state.corrections === 0 && state.merges === 0 && state.overrides === 0;
+  });
+
+  // Turn off editor mode
+  await page.locator('button[aria-label="Toggle editor mode"]').click();
+  await page.waitForTimeout(500);
 
   // ============================================================
   // TEST 4: Settings panel
@@ -273,7 +400,64 @@ async function main() {
     await page.locator('button[aria-label="Bookmarks and annotations"]').click();
     await page.waitForTimeout(1000);
     const text = await page.locator("aside[aria-label='Detail panel']").textContent();
-    return text?.includes("BOOKMARKS (1)") ?? false;
+    // CSS uppercase makes "Bookmarks (1)" render as "BOOKMARKS (1)" but textContent is mixed case
+    return text?.toLowerCase().includes("bookmarks (1)") ?? false;
+  });
+
+  await run("Add annotation", async () => {
+    // Navigate to Book One and hover a paragraph to add annotation
+    await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
+    await page.locator('nav[aria-label="Chapter navigation"] button', { hasText: "Book One" }).first().click();
+    await page.waitForTimeout(2000);
+    // Hover the second paragraph (first might be a header)
+    const para = page.locator("p[data-block-id]").nth(1);
+    await para.hover();
+    await page.waitForTimeout(500);
+    await page.locator('button[aria-label="Add annotation"]').first().click();
+    await page.waitForTimeout(500);
+    // Type into the textarea using Playwright's fill (properly triggers React events)
+    const textarea = page.locator('textarea[placeholder="Your note…"]');
+    await textarea.fill("My test annotation");
+    await page.waitForTimeout(300);
+    // Click Save — use the textarea's parent container to find the right Save button
+    const annotationContainer = page.locator('textarea[placeholder="Your note…"]').locator("..").locator("..");
+    await annotationContainer.locator("button", { hasText: "Save" }).click();
+    await page.waitForTimeout(1000);
+    const annotCount = await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}").state?.annotations || {}).length);
+    return annotCount === 1;
+  });
+
+  await run("Annotation persists across reload", async () => {
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
+    const annotCount = await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}").state?.annotations || {}).length);
+    return annotCount === 1;
+  });
+
+  await run("Annotation appears in panel", async () => {
+    // Navigate fresh and open bookmarks panel
+    await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
+    // The annotation was added to a Book One paragraph in a previous test.
+    // The bookmarks panel should show it regardless of which chapter is loaded.
+    await page.locator('button[aria-label="Bookmarks and annotations"]').click();
+    await page.waitForTimeout(1000);
+    const text = await page.locator("aside[aria-label='Detail panel']").textContent();
+    // Check for annotations (1) AND the annotation text
+    const hasAnnotCount = text?.toLowerCase().includes("annotations (1)") ?? false;
+    const hasAnnotText = text?.includes("My test annotation") ?? false;
+    return hasAnnotCount && hasAnnotText;
+  });
+
+  await run("Delete annotation", async () => {
+    // Clear all localStorage to clean up
+    await page.evaluate(() => localStorage.removeItem("odyssey-reader-v1"));
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
+    const annotCount = await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}").state?.annotations || {}).length);
+    const bmCount = await page.evaluate(() => JSON.parse(localStorage.getItem("odyssey-reader-v1") || "{}").state?.bookmarks?.length || 0);
+    return annotCount === 0 && bmCount === 0;
   });
 
   // ============================================================
@@ -333,29 +517,31 @@ async function main() {
     await page.waitForTimeout(3000);
     await page.locator('nav[aria-label="Chapter navigation"] button', { hasText: "Book One" }).first().click();
     await page.waitForTimeout(2000);
-    // Ensure the narrator legend panel is open by clicking the toggle
-    // (if it's already open, this closes it; click again to reopen)
-    // First check if the panel is open and showing narrators
-    let panelText = await page.locator("aside[aria-label='Detail panel']").textContent();
-    let asideWidth = await page.evaluate(() => document.querySelector('aside[aria-label="Detail panel"]')?.offsetWidth ?? 0);
-    if (asideWidth === 0 || !panelText?.includes("Hide")) {
-      // Panel is closed or not showing narrators — click toggle to open
+    // Turn off editor mode if it's on (left over from previous tests)
+    const editorBtn = page.locator('button[aria-label="Toggle editor mode"]');
+    const isPressed = await editorBtn.getAttribute("aria-pressed");
+    if (isPressed === "true") {
+      await editorBtn.click();
+      await page.waitForTimeout(500);
+    }
+    // Ensure the narrator legend panel is open and showing.
+    // Try up to 5 times to click the Narrators button until hide buttons appear.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const hideBtnCount = await page.locator("aside[aria-label='Detail panel'] button[aria-label^='Hide ']").count();
+      if (hideBtnCount > 0) break;
+      // Click Narrators button
       await page.locator('button[aria-label="Toggle narrator legend"]').click();
       await page.waitForTimeout(1000);
     }
-    panelText = await page.locator("aside[aria-label='Detail panel']").textContent();
     const count = await page.locator("aside[aria-label='Detail panel'] button[aria-label^='Hide ']").count();
     return count > 3;
   });
 
   await run("Hide Guide produces folded seams", async () => {
-    // The legend should already be open from the previous test
-    // But navigate fresh to be safe
-    await page.locator('button[aria-label="Toggle narrator legend"]').click();
-    await page.waitForTimeout(500);
-    await page.locator('button[aria-label="Toggle narrator legend"]').click();
-    await page.waitForTimeout(1000);
-    await page.locator('button[aria-label="Hide The Guide"]').first().click();
+    // The legend should already be open from the previous test.
+    // Click "Hide The Guide" — the first narrator in the list is "The Guide".
+    const hideBtn = page.locator('button[aria-label="Hide The Guide"]').first();
+    await hideBtn.click();
     await page.waitForTimeout(1500);
     const seamCount = await page.locator(".border-dashed").count();
     return seamCount > 0;

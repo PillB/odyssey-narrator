@@ -23,28 +23,45 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
   const editor = useOdysseyStore((s) => s.editor);
   const chapters = useOdysseyStore((s) => s.chapters);
 
-  /** Look up the chapter label + paragraph text for a block id. */
+  /** Look up the chapter label + paragraph text for a block id.
+   *  Returns a partial result even if the chapter isn't loaded yet (using
+   *  the block ID as a fallback), so annotations/bookmarks always appear. */
   const resolveBlock = (blockId: string) => {
     const [slug, idxStr] = blockId.split(":");
     const idx = parseInt(idxStr, 10);
-    const ch = chapters.get(slug);
-    if (!ch) return null;
-    const block = ch.blocks[idx];
-    if (!block) return null;
     const meta = CHAPTER_MANIFEST.find((c) => c.slug === slug);
+    const chapterLabel = meta?.label ?? slug.replace("odyssey-book-", "Book ").replace("-preface", " (Preface)");
+    const ch = chapters.get(slug);
+    if (!ch) {
+      // Chapter not loaded yet — show partial info with block ID as fallback
+      return {
+        chapterLabel,
+        text: `(block #${idx})`,
+      };
+    }
+    const block = ch.blocks[idx];
+    if (!block) {
+      return {
+        chapterLabel,
+        text: `(block #${idx})`,
+      };
+    }
     return {
-      chapterLabel: meta?.label ?? slug,
+      chapterLabel,
       text: block.text.slice(0, 140) + (block.text.length > 140 ? "…" : ""),
-      block,
     };
   };
 
-  const bookmarked = bookmarks.map(resolveBlock).filter(Boolean);
-  const annotated = Object.entries(annotations).map(([blockId, text]) => ({
-    blockId,
-    text,
-    ...resolveBlock(blockId)!,
-  }));
+  const bookmarked = bookmarks.map((blockId) => ({ blockId, ...resolveBlock(blockId)! })).filter((b) => b !== null);
+  const annotated = Object.entries(annotations).map(([blockId, annotationText]) => {
+    const resolved = resolveBlock(blockId)!;
+    return {
+      blockId,
+      annotationText,
+      chapterLabel: resolved.chapterLabel,
+      paragraphText: resolved.text,
+    };
+  });
 
   /** Export bookmarks + annotations + corrections as Markdown or JSON. */
   const exportData = async (format: "markdown" | "json") => {
@@ -122,10 +139,13 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
             ) : (
               <ul>
                 {bookmarked.map((b) => (
-                  <li key={b!.block.id} className="group">
+                  <li key={b!.blockId} className="group">
                     <button
                       className="w-full text-left px-3 py-2 hover:bg-sidebar-accent/50 transition-colors"
-                      onClick={() => onJump(b!.block.chapterId, b!.block.id)}
+                      onClick={() => {
+                        const [slug] = b!.blockId.split(":");
+                        onJump(slug, b!.blockId);
+                      }}
                     >
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                         <Bookmark className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" fill="currentColor" />
@@ -137,7 +157,7 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
                       className="ml-3 mb-1 text-[10px] text-muted-foreground hover:text-destructive inline-flex items-center gap-1 opacity-0 group-hover:opacity-100"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleBookmark(b!.block.id);
+                        toggleBookmark(b!.blockId);
                       }}
                     >
                       <Trash2 className="h-2.5 w-2.5" /> Remove
@@ -161,13 +181,16 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
             ) : (
               <ul>
                 {annotated.map((a) => (
-                  <li key={a.blockId} className="group px-3 py-2 hover:bg-sidebar-accent/50 transition-colors cursor-pointer" onClick={() => onJump(a.block.chapterId, a.block.id)}>
+                  <li key={a.blockId} className="group px-3 py-2 hover:bg-sidebar-accent/50 transition-colors cursor-pointer" onClick={() => {
+                    const [slug] = a.blockId.split(":");
+                    onJump(slug, a.blockId);
+                  }}>
                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       <span className="font-medium">{a.chapterLabel}</span>
                     </div>
-                    <p className="text-[11px] mt-0.5 line-clamp-1 italic text-muted-foreground">↳ {a.text}</p>
+                    <p className="text-[11px] mt-0.5 line-clamp-1 italic text-muted-foreground">↳ {a.paragraphText}</p>
                     <p className="text-xs mt-1 line-clamp-3 bg-blue-50/40 dark:bg-blue-950/15 border-l-2 border-blue-400/60 dark:border-blue-700/60 pl-2 py-1 rounded-r whitespace-pre-wrap">
-                      {a.text ? a.text : <span className="italic text-muted-foreground/60">[empty]</span>}
+                      {a.annotationText ? a.annotationText : <span className="italic text-muted-foreground/60">[empty]</span>}
                     </p>
                     <button
                       className="mt-1 text-[10px] text-muted-foreground hover:text-destructive inline-flex items-center gap-1 opacity-0 group-hover:opacity-100"

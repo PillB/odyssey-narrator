@@ -126,7 +126,13 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
   const currentNarratorId = editor.blockCorrections[selectedBlock.id] ?? selectedBlock.inferredNarratorId;
   const currentNarrator = narratorRegistry.find((n) => n.id === currentNarratorId);
   const override = editor.narratorOverrides[currentNarratorId];
-  const displayNarrator = override ? { ...currentNarrator, ...override } : currentNarrator;
+  // Merge currentNarrator with override. If currentNarrator is undefined
+  // (e.g. after a merge), fall back to override only, then to a safe default.
+  const displayNarrator = currentNarrator
+    ? (override ? { ...currentNarrator, ...override } : currentNarrator)
+    : override
+      ? { id: currentNarratorId, name: "", builtin: false, isCharacter: true, color: "#8b6f47", accent: "#c9a875", ...override }
+      : undefined;
 
   return (
     <div className="flex flex-col h-full">
@@ -290,7 +296,7 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
               <div className="mt-1 space-y-2">
                 <div className="flex gap-1">
                   <Input
-                    value={renameValue || displayNarrator.name}
+                    value={renameValue || displayNarrator.name || ""}
                     onChange={(e) => {
                       setRenaming(true);
                       setRenameValue(e.target.value);
@@ -302,7 +308,7 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
                     size="sm"
                     className="h-7 text-xs"
                     onClick={() => {
-                      renameNarrator(currentNarratorId, renameValue || displayNarrator.name);
+                      renameNarrator(currentNarratorId, renameValue || displayNarrator.name || "");
                       setRenaming(false);
                     }}
                   >
@@ -313,15 +319,15 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
                   <Label className="text-[10px]">Color</Label>
                   <input
                     type="color"
-                    value={displayNarrator.color}
+                    value={displayNarrator.color || "#8b6f47"}
                     onChange={(e) => recolorNarrator(currentNarratorId, e.target.value)}
                     className="h-6 w-8 cursor-pointer border rounded"
                   />
                   <Label className="text-[10px]">Accent</Label>
                   <input
                     type="color"
-                    value={displayNarrator.accent}
-                    onChange={(e) => recolorNarrator(currentNarratorId, displayNarrator.color, e.target.value)}
+                    value={displayNarrator.accent || "#c9a875"}
+                    onChange={(e) => recolorNarrator(currentNarratorId, displayNarrator.color || "#8b6f47", e.target.value)}
                     className="h-6 w-8 cursor-pointer border rounded"
                   />
                 </div>

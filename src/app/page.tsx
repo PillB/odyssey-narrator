@@ -29,12 +29,14 @@ export default function Page() {
   const currentChapterId = useOdysseyStore((s) => s.currentChapterId);
 
   // Derive the effective right panel.
-  // - If editor mode is on, prefer editor panel (unless user explicitly
-  //   chose settings/search).
+  // - If editor mode is on AND the user hasn't explicitly chosen a non-editor
+  //   panel (settings/search/bookmarks), prefer the editor panel.
   // - If editor mode is off, never show editor panel (fall back to legend).
+  // - Explicit user choices (settings/search/bookmarks) always win over editor
+  //   mode, because the user just clicked that button.
   const effectiveRightPanel: RightPanelKind | null = !rightOpen
     ? null
-    : editorMode && rightPanelTarget !== "settings" && rightPanelTarget !== "search"
+    : editorMode && rightPanelTarget !== "settings" && rightPanelTarget !== "search" && rightPanelTarget !== "bookmarks"
       ? "editor"
       : rightPanelTarget === "editor"
         ? "legend"
@@ -110,9 +112,19 @@ export default function Page() {
     }
   };
 
-  // Toolbar callbacks
-  const onToggleRight = () => {
-    setRightOpen((v) => !v);
+  // "Show legend" = toggle behavior:
+  // - If panel is closed → open it showing legend
+  // - If panel is open showing legend → close it
+  // - If panel is open showing something else → switch to legend
+  const onShowLegend = () => {
+    if (!rightOpen) {
+      setRightOpen(true);
+      setRightPanelTarget("legend");
+    } else if (effectiveRightPanel === "legend") {
+      setRightOpen(false);
+    } else {
+      setRightPanelTarget("legend");
+    }
   };
 
   return (
@@ -121,7 +133,6 @@ export default function Page() {
         leftSidebarOpen={leftOpen}
         rightSidebarOpen={rightOpen}
         onToggleLeft={() => setLeftOpen((v) => !v)}
-        onToggleRight={onToggleRight}
         onOpenSettings={() => {
           setRightOpen(true);
           setRightPanelTarget("settings");
@@ -134,6 +145,7 @@ export default function Page() {
           setRightOpen(true);
           setRightPanelTarget("bookmarks");
         }}
+        onShowLegend={onShowLegend}
       />
       <div className="flex-1 flex min-h-0">
         {/* Left sidebar */}

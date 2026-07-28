@@ -28,20 +28,21 @@ interface ToolbarProps {
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
   onToggleLeft: () => void;
-  onToggleRight: () => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
   onOpenBookmarks: () => void;
+  /** Show the narrator legend panel (replaces whatever is currently shown). */
+  onShowLegend: () => void;
 }
 
 export function Toolbar({
   leftSidebarOpen,
   rightSidebarOpen,
   onToggleLeft,
-  onToggleRight,
   onOpenSettings,
   onOpenSearch,
   onOpenBookmarks,
+  onShowLegend,
 }: ToolbarProps) {
   const currentChapterId = useOdysseyStore((s) => s.currentChapterId);
   const setCurrentChapter = useOdysseyStore((s) => s.setCurrentChapter);
@@ -160,7 +161,13 @@ export function Toolbar({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onToggleRight} aria-label="Toggle narrator legend">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={onShowLegend}
+              aria-label="Toggle narrator legend"
+            >
               <PanelRight className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
