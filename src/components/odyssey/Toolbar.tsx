@@ -51,6 +51,8 @@ export function Toolbar({
   const chapters = useOdysseyStore((s) => s.chapters);
   const bookmarkCount = useOdysseyStore((s) => s.bookmarks.length);
   const annotationCount = useOdysseyStore((s) => Object.keys(s.annotations).length);
+  const language = useOdysseyStore((s) => s.reader.language);
+  const setLanguage = useOdysseyStore((s) => s.setLanguage);
   const currentIndex = CHAPTER_MANIFEST.findIndex((c) => c.slug === currentChapterId);
   const prev = currentIndex > 0 ? CHAPTER_MANIFEST[currentIndex - 1] : null;
   const next = currentIndex >= 0 && currentIndex < CHAPTER_MANIFEST.length - 1 ? CHAPTER_MANIFEST[currentIndex + 1] : null;
@@ -106,6 +108,43 @@ export function Toolbar({
         </div>
 
         <div className="flex-1" />
+
+        {/* Language toggle (EN / ES) */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center rounded-md border border-border overflow-hidden" role="group" aria-label="Language toggle">
+              <button
+                type="button"
+                onClick={() => setLanguage("en")}
+                className={cn(
+                  "px-2 h-8 text-[10px] font-medium transition-colors",
+                  language === "en"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-accent",
+                )}
+                aria-pressed={language === "en"}
+                aria-label="English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage("es")}
+                className={cn(
+                  "px-2 h-8 text-[10px] font-medium transition-colors border-l border-border",
+                  language === "es"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-accent",
+                )}
+                aria-pressed={language === "es"}
+                aria-label="Español"
+              >
+                ES
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Toggle language (English / Español)</TooltipContent>
+        </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>

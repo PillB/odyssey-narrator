@@ -97,19 +97,21 @@ export function Reader({ onBlockSelect }: ReaderProps) {
   const setScrollProgress = useOdysseyStore((s) => s.setScrollProgress);
   const narratorRegistry = useOdysseyStore((s) => s.narratorRegistry);
   const showFootnotesInline = useOdysseyStore((s) => s.reader.showFootnotesInline);
+  const language = useOdysseyStore((s) => s.reader.language);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-load current chapter when it changes.
+  // Auto-load current chapter when it changes (or when language changes).
+  const cacheKey = `${language}:${currentChapterId}`;
   useEffect(() => {
     if (!currentChapterId) return;
-    if (!chapters.has(currentChapterId)) {
+    if (!chapters.has(cacheKey)) {
       loadChapter(currentChapterId);
     } else {
-      // Scroll to top on chapter change.
+      // Scroll to top on chapter/language change.
       scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     }
-  }, [currentChapterId, chapters, loadChapter]);
+  }, [cacheKey, currentChapterId, chapters, loadChapter]);
 
   // Track scroll progress.
   useEffect(() => {
@@ -154,7 +156,7 @@ export function Reader({ onBlockSelect }: ReaderProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [currentChapterId]);
 
-  const chapter = currentChapterId ? chapters.get(currentChapterId) : undefined;
+  const chapter = currentChapterId ? chapters.get(cacheKey) : undefined;
 
   // Resolve each block's effective narrator id (for folding).
   const resolvedNarratorIds = useMemo(() => {
@@ -246,6 +248,8 @@ export function Reader({ onBlockSelect }: ReaderProps) {
 function EmptyState() {
   const loadChapter = useOdysseyStore((s) => s.loadChapter);
   const setCurrentChapter = useOdysseyStore((s) => s.setCurrentChapter);
+  const language = useOdysseyStore((s) => s.reader.language);
+  const isEs = language === "es";
 
   return (
     <div className="flex-1 flex items-center justify-center p-8">
@@ -254,13 +258,12 @@ function EmptyState() {
           <span className="text-2xl">❦</span>
         </div>
         <h1 className="font-serif text-3xl md:text-4xl font-semibold mb-3">
-          The Odyssey, Retold
+          {isEs ? "La Odisea, Recontada" : "The Odyssey, Retold"}
         </h1>
         <p className="text-sm text-muted-foreground mb-6 italic">
-          An intelligent reading experience for an AI-translated Homer.
-          Every paragraph is classified by narrator — the guide, Odysseus, the
-          invocation, the footnotes, or the speaking characters — and every
-          classification is correctable in the editor.
+          {isEs
+            ? "Una experiencia de lectura inteligente para un Homero traducido por IA. Cada párrafo está clasificado por narrador — el guía, Odiseo, la invocación, las notas al pie, o los personajes que hablan — y cada clasificación es corregible en el editor."
+            : "An intelligent reading experience for an AI-translated Homer. Every paragraph is classified by narrator — the guide, Odysseus, the invocation, the footnotes, or the speaking characters — and every classification is correctable in the editor."}
         </p>
         <button
           className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -269,10 +272,10 @@ function EmptyState() {
             loadChapter("odyssey-book-00-preface");
           }}
         >
-          Begin reading
+          {isEs ? "Comenzar a leer" : "Begin reading"}
         </button>
         <p className="text-[10px] text-muted-foreground/70 mt-4">
-          Or pick a chapter from the contents panel on the left.
+          {isEs ? "O elige un capítulo del panel de contenido a la izquierda." : "Or pick a chapter from the contents panel on the left."}
         </p>
       </div>
     </div>

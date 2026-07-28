@@ -22,6 +22,7 @@ export function SearchPanel({ onClose, onJump }: SearchPanelProps) {
   const chapters = useOdysseyStore((s) => s.chapters);
   const narratorRegistry = useOdysseyStore((s) => s.narratorRegistry);
   const editor = useOdysseyStore((s) => s.editor);
+  const language = useOdysseyStore((s) => s.reader.language);
   const loadAllChapters = useOdysseyStore((s) => s.loadAllChapters);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,7 +42,7 @@ export function SearchPanel({ onClose, onJump }: SearchPanelProps) {
     const q = query.toLowerCase();
     const out: Array<{ block: Block; chapterLabel: string; narratorName: string; snippet: string }> = [];
     for (const meta of CHAPTER_MANIFEST) {
-      const ch = chapters.get(meta.slug);
+      const ch = chapters.get(`${language}:${meta.slug}`);
       if (!ch) continue;
       for (const b of ch.blocks) {
         if (b.kind === "header" || b.kind === "scene_break" || b.kind === "notes_section_header") continue;
@@ -66,7 +67,7 @@ export function SearchPanel({ onClose, onJump }: SearchPanelProps) {
       }
     }
     return out;
-  }, [query, chapters, narratorRegistry, editor.merges, editor.blockCorrections]);
+  }, [query, chapters, narratorRegistry, editor.merges, editor.blockCorrections, language]);
 
   return (
     <div className="flex flex-col h-full">

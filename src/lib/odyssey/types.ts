@@ -141,6 +141,8 @@ export interface ReaderPreferences {
   showFootnotesInline: boolean;
   showNarratorLabels: boolean;
   paragraphSpacing: "compact" | "comfortable" | "spacious";
+  /** UI + book language: "en" (English) or "es" (Spanish LATAM). */
+  language: "en" | "es";
 }
 
 /** Visibility per narrator id (folding system). */

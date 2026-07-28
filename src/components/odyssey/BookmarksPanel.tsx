@@ -2,6 +2,7 @@
 
 import { useOdysseyStore } from "@/lib/odyssey/store";
 import { CHAPTER_MANIFEST } from "@/lib/odyssey/chapters";
+import { generateMarkdownExport, generateJsonExport, downloadFile, type ExportState } from "@/lib/odyssey/export-utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bookmark, MessageSquare, Trash2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
   const setAnnotation = useOdysseyStore((s) => s.setAnnotation);
   const editor = useOdysseyStore((s) => s.editor);
   const chapters = useOdysseyStore((s) => s.chapters);
+  const language = useOdysseyStore((s) => s.reader.language);
 
   /** Look up the chapter label + paragraph text for a block id.
    *  Returns a partial result even if the chapter isn't loaded yet (using
@@ -30,8 +32,10 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
     const [slug, idxStr] = blockId.split(":");
     const idx = parseInt(idxStr, 10);
     const meta = CHAPTER_MANIFEST.find((c) => c.slug === slug);
-    const chapterLabel = meta?.label ?? slug.replace("odyssey-book-", "Book ").replace("-preface", " (Preface)");
-    const ch = chapters.get(slug);
+    const chapterLabel = language === "es"
+      ? (meta?.labelEs ?? slug.replace("odyssey-book-", "Libro ").replace("-preface", " (Prólogo)"))
+      : (meta?.label ?? slug.replace("odyssey-book-", "Book ").replace("-preface", " (Preface)"));
+    const ch = chapters.get(`${language}:${slug}`);
     if (!ch) {
       // Chapter not loaded yet — show partial info with block ID as fallback
       return {
@@ -63,37 +67,24 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
     };
   });
 
-  /** Export bookmarks + annotations + corrections as Markdown or JSON. */
-  const exportData = async (format: "markdown" | "json") => {
-    const stateParam = encodeURIComponent(
-      JSON.stringify({
-        bookmarks,
-        annotations,
-        editor: {
-          blockCorrections: editor.blockCorrections,
-          merges: editor.merges,
-          narratorOverrides: editor.narratorOverrides,
-        },
-      }),
-    );
-    const url = `/api/export?format=${format}&state=${stateParam}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      alert("Export failed: " + (await res.text()));
-      return;
+  /** Export bookmarks + annotations + corrections as Markdown or JSON (client-side). */
+  const exportData = (format: "markdown" | "json") => {
+    const state: ExportState = {
+      bookmarks,
+      annotations,
+      editor: {
+        blockCorrections: editor.blockCorrections,
+        merges: editor.merges,
+        narratorOverrides: editor.narratorOverrides,
+      },
+    };
+    if (format === "markdown") {
+      const md = generateMarkdownExport(state);
+      downloadFile(md, "odyssey-export.md", "text/markdown");
+    } else {
+      const json = generateJsonExport(state);
+      downloadFile(json, "odyssey-export.json", "application/json");
     }
-    const blob = await res.blob();
-    const disposition = res.headers.get("Content-Disposition") || "";
-    const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
-    const filename = filenameMatch?.[1] || `odyssey-export.${format === "markdown" ? "md" : "json"}`;
-    // Trigger download
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
   };
 
   return (

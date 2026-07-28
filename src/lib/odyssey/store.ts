@@ -46,6 +46,7 @@ const DEFAULT_READER: ReaderPreferences = {
   showFootnotesInline: true,
   showNarratorLabels: false,
   paragraphSpacing: "comfortable",
+  language: "en",
 };
 
 interface OdysseyState {
@@ -76,6 +77,9 @@ interface OdysseyState {
   loadAllChapters: () => Promise<void>;
   setCurrentChapter: (slug: string) => void;
   setReaderPref: <K extends keyof ReaderPreferences>(key: K, value: ReaderPreferences[K]) => void;
+  /** Change the UI + book language. Clears the chapter cache so chapters
+   *  are re-fetched in the new language. */
+  setLanguage: (lang: "en" | "es") => void;
   toggleNarratorVisibility: (narratorId: string) => void;
   setNarratorVisibility: (narratorId: string, visible: boolean) => void;
   setEditorMode: (on: boolean) => void;
@@ -120,19 +124,21 @@ export const useOdysseyStore = create<OdysseyState>()(
       // --- Actions ---
 
       loadChapter: async (slug: string) => {
-        const existing = get().chapters.get(slug);
+        const lang = get().reader.language;
+        const cacheKey = `${lang}:${slug}`;
+        const existing = get().chapters.get(cacheKey);
         if (existing) return existing;
         try {
           set({ loading: true, error: null });
-          const raw = await fetchChapterMarkdown(slug);
+          const raw = await fetchChapterMarkdown(slug, lang);
           const meta = CHAPTER_MANIFEST.find((c) => c.slug === slug);
           if (!meta) throw new Error(`Unknown chapter slug: ${slug}`);
           const { chapter, disagreements, flags } = fullAnalysisPipeline(slug, meta.number, raw);
           set((state) => {
             const chapters = new Map(state.chapters);
-            chapters.set(slug, chapter);
+            chapters.set(cacheKey, chapter);
             const auditTrails = new Map(state.auditTrails);
-            auditTrails.set(slug, { disagreements, flags });
+            auditTrails.set(cacheKey, { disagreements, flags });
             const narratorRegistry = buildNarratorRegistry(
               Array.from(chapters.values()),
               state.editor.merges,
@@ -150,7 +156,7 @@ export const useOdysseyStore = create<OdysseyState>()(
               loading: false,
             };
           });
-          return get().chapters.get(slug)!;
+          return get().chapters.get(cacheKey)!;
         } catch (e) {
           set({ loading: false, error: (e as Error).message });
           throw e;
@@ -175,6 +181,24 @@ export const useOdysseyStore = create<OdysseyState>()(
 
       setReaderPref: (key, value) =>
         set((state) => ({ reader: { ...state.reader, [key]: value } })),
+
+      setLanguage: (lang) => {
+        if (lang === get().reader.language) return;
+        set((state) => ({
+          reader: { ...state.reader, language: lang },
+          // Clear cached chapters + audit trails so they reload in the new language.
+          chapters: new Map(),
+          auditTrails: new Map(),
+          // Reset the narrator registry + stats (will rebuild as chapters load).
+          narratorRegistry: [],
+          narratorStats: new Map(),
+        }));
+        // Reload the current chapter in the new language.
+        const currentSlug = get().currentChapterId;
+        if (currentSlug) {
+          get().loadChapter(currentSlug);
+        }
+      },
 
       toggleNarratorVisibility: (narratorId) =>
         set((state) => ({

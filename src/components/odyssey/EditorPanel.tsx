@@ -60,7 +60,8 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
     setLlmProposal(null);
     try {
       // Build surrounding context from the chapter: ~3 blocks before + 3 after.
-      const chapter = chapters.get(selectedBlock.chapterId) as Chapter | undefined;
+      const cacheKey = `${useOdysseyStore.getState().reader.language}:${selectedBlock.chapterId}`;
+      const chapter = chapters.get(cacheKey) as Chapter | undefined;
       let context = "";
       if (chapter) {
         const idx = selectedBlock.index;
