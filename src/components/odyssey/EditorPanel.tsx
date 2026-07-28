@@ -59,38 +59,9 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
     setLlmError(null);
     setLlmProposal(null);
     try {
-      // Build surrounding context from the chapter: ~3 blocks before + 3 after.
-      const cacheKey = `${useOdysseyStore.getState().reader.language}:${selectedBlock.chapterId}`;
-      const chapter = chapters.get(cacheKey) as Chapter | undefined;
-      let context = "";
-      if (chapter) {
-        const idx = selectedBlock.index;
-        const before = chapter.blocks.slice(Math.max(0, idx - 3), idx);
-        const after = chapter.blocks.slice(idx + 1, idx + 4);
-        context = [...before, selectedBlock, ...after]
-          .map((b) => b.text.slice(0, 200))
-          .join("\n\n");
-      }
-      const res = await fetch("/api/evaluator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chapterId: selectedBlock.chapterId,
-          blockId: selectedBlock.id,
-          raw: selectedBlock.raw,
-          kind: selectedBlock.kind,
-          inferredNarratorId: selectedBlock.inferredNarratorId,
-          confidence: selectedBlock.confidence,
-          reasoning: selectedBlock.reasoning,
-          surroundingContext: context,
-        }),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error ?? `HTTP ${res.status}`);
-      }
-      const proposal = (await res.json()) as LLMProposal;
-      setLlmProposal(proposal);
+      // The LLM evaluator API route is not available on static exports
+      // (GitHub Pages). Show a helpful message instead of failing.
+      setLlmError("LLM evaluator is not available on the static deployment. This feature requires a server-side API route. Run the app locally with `bun run dev` to use it.");
     } catch (e) {
       setLlmError((e as Error).message);
     } finally {

@@ -59,6 +59,13 @@ export const ODYSSEUS_INNER_BOOKS = new Set([9, 10, 11, 12]);
 
 const textCache = new Map<string, string>();
 
+/** Get the basePath for fetch() calls. Next.js auto-prepends basePath
+ *  for <Link> and <Image> but NOT for raw fetch(). We expose it via
+ *  NEXT_PUBLIC_BASE_PATH env var (set in next.config.ts). */
+function getBasePath(): string {
+  return process.env.NEXT_PUBLIC_BASE_PATH || "";
+}
+
 /** Fetch raw markdown for a chapter (cached). Browser-only.
  *  Falls back to English if the requested language is not available. */
 export async function fetchChapterMarkdown(slug: string, lang: Language = "en"): Promise<string> {
@@ -66,7 +73,8 @@ export async function fetchChapterMarkdown(slug: string, lang: Language = "en"):
   const cached = textCache.get(cacheKey);
   if (cached) return cached;
   const langPath = lang === "en" ? "" : `${lang}/`;
-  const res = await fetch(`/books/${langPath}${slug}.md`, { cache: "force-cache" });
+  const url = `${getBasePath()}/books/${langPath}${slug}.md`;
+  const res = await fetch(url, { cache: "force-cache" });
   if (!res.ok) {
     if (lang !== "en") {
       // Fallback to English
