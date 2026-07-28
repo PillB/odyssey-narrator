@@ -38,7 +38,7 @@ RULES:
 Return ONLY the translated markdown. No preamble, no code fences.`;
 
 async function translateChunk(zai: any, text: string, chunkNum: number, total: number): Promise<string> {
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     try {
       const completion = await zai.chat.completions.create({
         messages: [
@@ -54,7 +54,12 @@ async function translateChunk(zai: any, text: string, chunkNum: number, total: n
       return content.replace(/^```(?:markdown)?\s*\n/i, "").replace(/\n```\s*$/i, "").trim();
     } catch (e) {
       console.error(`${slug}: chunk ${chunkNum} attempt ${attempt} failed: ${(e as Error).message}`);
-      if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
+      if (attempt < 5) {
+        // Exponential backoff: 10s, 20s, 40s, 80s
+        const delay = 10000 * Math.pow(2, attempt - 1);
+        console.log(`  Waiting ${delay/1000}s before retry...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
       else throw e;
     }
   }
