@@ -3,7 +3,8 @@
 import { useOdysseyStore } from "@/lib/odyssey/store";
 import { CHAPTER_MANIFEST } from "@/lib/odyssey/chapters";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bookmark, MessageSquare, Trash2 } from "lucide-react";
+import { Bookmark, MessageSquare, Trash2, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface BookmarksPanelProps {
   onJump: (chapterId: string, blockId: string) => void;
@@ -12,12 +13,14 @@ interface BookmarksPanelProps {
 /**
  * BookmarksPanel — shows the reader's saved bookmarks + annotations.
  * Click an entry to jump to that block.
+ * Export button downloads all saved data as Markdown or JSON.
  */
 export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
   const bookmarks = useOdysseyStore((s) => s.bookmarks);
   const annotations = useOdysseyStore((s) => s.annotations);
   const toggleBookmark = useOdysseyStore((s) => s.toggleBookmark);
   const setAnnotation = useOdysseyStore((s) => s.setAnnotation);
+  const editor = useOdysseyStore((s) => s.editor);
   const chapters = useOdysseyStore((s) => s.chapters);
 
   /** Look up the chapter label + paragraph text for a block id. */
@@ -43,12 +46,67 @@ export function BookmarksPanel({ onJump }: BookmarksPanelProps) {
     ...resolveBlock(blockId)!,
   }));
 
+  /** Export bookmarks + annotations + corrections as Markdown or JSON. */
+  const exportData = async (format: "markdown" | "json") => {
+    const stateParam = encodeURIComponent(
+      JSON.stringify({
+        bookmarks,
+        annotations,
+        editor: {
+          blockCorrections: editor.blockCorrections,
+          merges: editor.merges,
+          narratorOverrides: editor.narratorOverrides,
+        },
+      }),
+    );
+    const url = `/api/export?format=${format}&state=${stateParam}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      alert("Export failed: " + (await res.text()));
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+    const filename = filenameMatch?.[1] || `odyssey-export.${format === "markdown" ? "md" : "json"}`;
+    // Trigger download
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b">
+      <div className="px-3 py-2 border-b flex items-center justify-between">
         <h2 className="text-xs uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
           <Bookmark className="h-3.5 w-3.5" /> Saved
         </h2>
+        {(bookmarks.length > 0 || Object.keys(annotations).length > 0) && (
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              onClick={() => exportData("markdown")}
+              title="Export as Markdown"
+            >
+              <Download className="h-3 w-3 mr-1" /> .md
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[10px] px-2"
+              onClick={() => exportData("json")}
+              title="Export as JSON"
+            >
+              <Download className="h-3 w-3 mr-1" /> .json
+            </Button>
+          </div>
+        )}
       </div>
       <ScrollArea className="flex-1 odyssey-scroll">
         <div className="py-2">

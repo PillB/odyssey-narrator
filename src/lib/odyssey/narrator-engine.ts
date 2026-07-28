@@ -176,6 +176,17 @@ function inferNarrator(
           reasoning: `Quoted speech with pronoun attribution ("${pronoun} said"); resolved to "${ctx.lastMentionedCharacter}" from the preceding narration.`,
         };
       }
+      // Multi-paragraph dialogue co-reference: if the immediately preceding
+      // block was a high-confidence dialogue from a specific speaker (not
+      // "unknown"), this unattributed block is very likely the same speaker
+      // continuing. This is the Zeus 3-paragraph speech pattern.
+      if (ctx.lastBlockWasDialogue && ctx.lastDialogueSpeakerId && ctx.lastDialogueSpeakerId !== "unknown") {
+        return {
+          narratorId: ctx.lastDialogueSpeakerId,
+          confidence: 0.88,
+          reasoning: `Multi-paragraph dialogue continuation: preceding block was attributed to "${ctx.lastDialogueSpeakerId}", and this block has no attribution — likely the same speaker continuing.`,
+        };
+      }
       // No pronoun attribution either. Try the last-mentioned character
       // directly (lower confidence — this is a continuation guess).
       if (ctx.lastMentionedCharacter) {
@@ -257,6 +268,8 @@ function isNarratorReentry(text: string): boolean {
 
 interface InferenceContext {
   lastDialogueSpeakerId: string | null;
+  /** True if the immediately preceding block was dialogue (for multi-paragraph co-reference). */
+  lastBlockWasDialogue: boolean;
   /** Last-mentioned canonical character name in narration (used to resolve
    *  pronoun-attributed dialogue like `"Foo," he said`). */
   lastMentionedCharacter: string | null;
@@ -276,6 +289,7 @@ interface InferenceContext {
 export function analyzeChapter(chapter: Chapter): Chapter {
   const ctx: InferenceContext = {
     lastDialogueSpeakerId: null,
+    lastBlockWasDialogue: false,
     lastMentionedCharacter: null,
     lastMentionedConfidence: 0,
     lastBlockWasSceneBreak: false,
@@ -306,6 +320,7 @@ export function analyzeChapter(chapter: Chapter): Chapter {
       ctx.lastDialogueSpeakerId = null;
       ctx.lastMentionedCharacter = null;
       ctx.lastMentionedConfidence = 0;
+      ctx.lastBlockWasDialogue = false;
     } else {
       ctx.lastBlockWasSceneBreak = false;
     }
@@ -321,11 +336,14 @@ export function analyzeChapter(chapter: Chapter): Chapter {
         const firstMentionIdx = block.text.indexOf(mentioned);
         ctx.lastMentionedConfidence = firstMentionIdx < 200 ? 0.75 : 0.6;
       }
+      // Narration breaks the dialogue co-reference chain.
+      ctx.lastBlockWasDialogue = false;
     }
 
-    // Track last dialogue speaker (for inheritance fallback).
+    // Track last dialogue speaker (for inheritance + multi-paragraph co-reference).
     if (block.kind === "dialogue" && confidence >= 0.7) {
       ctx.lastDialogueSpeakerId = narratorId;
+      ctx.lastBlockWasDialogue = true;
       // Also update lastMentionedCharacter: if the dialogue was attributed
       // to a specific character, that character is now the most salient.
       if (narratorId.startsWith("speaker:")) {
@@ -336,6 +354,9 @@ export function analyzeChapter(chapter: Chapter): Chapter {
           .join(" ");
         ctx.lastMentionedConfidence = 0.85;
       }
+    } else if (block.kind === "dialogue") {
+      // Low-confidence dialogue still counts as dialogue for the next block.
+      ctx.lastBlockWasDialogue = true;
     }
 
     // If we're back from a re-entry (i.e. previous block was narrator inside

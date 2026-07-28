@@ -51,4 +51,10 @@ prompt
 
 server.log
 # Skills directory
-/skills/
+/skills/dev.log
+.zscripts/
+screenshot-*.png
+/tmp/
+*.log
+skills/
+examples/
