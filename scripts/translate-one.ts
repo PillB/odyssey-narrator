@@ -94,16 +94,42 @@ async function main() {
 
   console.log(`${slug}: ${chunks.length} chunks`);
 
-  const translated: string[] = [];
-  for (let i = 0; i < chunks.length; i++) {
+  // Check for partial progress (resume support)
+  const partialPath = `/tmp/translate-partial-${slug}.txt`;
+  let translated: string[] = [];
+  let startChunk = 0;
+  if (existsSync(partialPath)) {
+    const partial = await readFile(partialPath, "utf-8");
+    const partialLines = partial.split("\n\n---CHUNK_BOUNDARY---\n\n");
+    if (partialLines.length > 1) {
+      translated = partialLines.slice(0, -1); // last entry might be incomplete
+      startChunk = translated.length;
+      console.log(`${slug}: resuming from chunk ${startChunk + 1}/${chunks.length}`);
+    }
+  }
+
+  for (let i = startChunk; i < chunks.length; i++) {
     process.stdout.write(`${slug}: chunk ${i + 1}/${chunks.length}... `);
-    const t = await translateChunk(zai, chunks[i], i + 1, chunks.length);
-    translated.push(t);
-    console.log("done");
+    try {
+      const t = await translateChunk(zai, chunks[i], i + 1, chunks.length);
+      translated.push(t);
+      console.log("done");
+      // Save partial progress after each chunk
+      await writeFile(partialPath, translated.join("\n\n---CHUNK_BOUNDARY---\n\n") + "\n\n---CHUNK_BOUNDARY---\n\n", "utf-8");
+    } catch (e) {
+      console.error(`FAILED: ${(e as Error).message}`);
+      // Save what we have and exit
+      if (translated.length > 0) {
+        await writeFile(partialPath, translated.join("\n\n---CHUNK_BOUNDARY---\n\n") + "\n\n---CHUNK_BOUNDARY---\n\n", "utf-8");
+      }
+      throw e;
+    }
   }
 
   const result = translated.join("\n\n");
   await writeFile(esPath, result, "utf-8");
+  // Clean up partial file
+  try { await import("fs/promises").then(fs => fs.unlink(partialPath)); } catch {}
   console.log(`${slug}: saved (${result.split(/\s+/).filter(Boolean).length} words)`);
 }
 
