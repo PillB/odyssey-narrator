@@ -11,6 +11,7 @@ import {
   PanelRight,
   PanelLeft,
   Search,
+  Bookmark,
 } from "lucide-react";
 import { useOdysseyStore } from "@/lib/odyssey/store";
 import { CHAPTER_MANIFEST } from "@/lib/odyssey/chapters";
@@ -30,6 +31,7 @@ interface ToolbarProps {
   onToggleRight: () => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
+  onOpenBookmarks: () => void;
 }
 
 export function Toolbar({
@@ -39,12 +41,15 @@ export function Toolbar({
   onToggleRight,
   onOpenSettings,
   onOpenSearch,
+  onOpenBookmarks,
 }: ToolbarProps) {
   const currentChapterId = useOdysseyStore((s) => s.currentChapterId);
   const setCurrentChapter = useOdysseyStore((s) => s.setCurrentChapter);
   const editorMode = useOdysseyStore((s) => s.editor.editorMode);
   const setEditorMode = useOdysseyStore((s) => s.setEditorMode);
   const chapters = useOdysseyStore((s) => s.chapters);
+  const bookmarkCount = useOdysseyStore((s) => s.bookmarks.length);
+  const annotationCount = useOdysseyStore((s) => Object.keys(s.annotations).length);
   const currentIndex = CHAPTER_MANIFEST.findIndex((c) => c.slug === currentChapterId);
   const prev = currentIndex > 0 ? CHAPTER_MANIFEST[currentIndex - 1] : null;
   const next = currentIndex >= 0 && currentIndex < CHAPTER_MANIFEST.length - 1 ? CHAPTER_MANIFEST[currentIndex + 1] : null;
@@ -100,6 +105,23 @@ export function Toolbar({
         </div>
 
         <div className="flex-1" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 relative" onClick={onOpenBookmarks} aria-label="Bookmarks and annotations">
+              <Bookmark className="h-4 w-4" />
+              {(bookmarkCount + annotationCount) > 0 && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-medium flex items-center justify-center tabular-nums"
+                  aria-label={`${bookmarkCount + annotationCount} saved items`}
+                >
+                  {bookmarkCount + annotationCount}
+                </span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Bookmarks & annotations</TooltipContent>
+        </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>

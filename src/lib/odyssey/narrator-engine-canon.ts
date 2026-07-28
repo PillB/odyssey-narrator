@@ -64,7 +64,14 @@ const KNOWN_SPEAKERS: Record<string, string> = {
 
 /** Pronouns / articles / common verbs that should never be treated as
  *  speaker names (they slip through the regex when dialogue is attributed
- *  via "said he" or "the king said"). */
+ *  via "said he" or "the king said").
+ *
+ *  NOTE: do NOT add words that are also used as periphrastic speaker
+ *  references when prefixed with "the" — e.g. "king", "queen", "prince",
+ *  "princess", "lord", "lady", "sir", "man", "woman", "boy", "girl",
+ *  "stranger", "beggar", "guest", "host", "friend", "messenger", "bard",
+ *  "singer", "nurse". As barewords they're lowercase, so the final
+ *  `/^[a-z]+$/` reject path in canonicalizeSpeaker handles them. */
 const NON_NAME_WORDS = new Set([
   "he", "she", "they", "we", "i", "you", "it",
   "his", "her", "their", "its", "our", "your", "my",
@@ -75,11 +82,8 @@ const NON_NAME_WORDS = new Set([
   "is", "was", "were", "are", "be", "been", "being",
   "has", "have", "had", "do", "does", "did",
   "will", "would", "shall", "should", "can", "could", "may", "might", "must",
-  "man", "woman", "boy", "girl", "child", "men", "women",
   "old", "young", "good", "great", "first", "last",
-  "king", "queen", "prince", "princess", "lord", "lady", "sir",
   "father", "mother", "son", "daughter", "brother", "sister",
-  "stranger", "beggar", "guest", "host", "friend",
   "voice", "sound", "cry", "shout", "whisper", "laugh", "sigh",
   "no", "yes", "here", "there", "now", "then",
   "all", "some", "any", "none", "both", "each", "every",
@@ -91,7 +95,11 @@ const NON_NAME_WORDS = new Set([
 ]);
 
 /** Convert a raw (possibly periphrastic) speaker name to canonical form.
- *  Returns `null` if the candidate is a pronoun/article (not a name). */
+ *  Returns `null` if the candidate is a pronoun/article (not a name).
+ *  For Pattern-5-style "post-quote capitalized word" matches, use
+ *  `canonicalizeKnownSpeaker` instead — it requires the candidate to be
+ *  in the KNOWN_SPEAKERS table (rejecting generic proper nouns like
+ *  "Listen", "Apparently", "Take" that often follow a closing quote). */
 export function canonicalizeSpeaker(raw: string): string | null {
   const lower = raw.toLowerCase().trim();
   // Reject pronouns / articles / non-name words.
@@ -129,6 +137,34 @@ export function canonicalizeSpeaker(raw: string): string | null {
     return null;
   }
   return raw;
+}
+
+/** Strict variant: only return canonical names that appear in the
+ *  KNOWN_SPEAKERS table. Use this for low-confidence patterns (like
+ *  Pattern 5's "post-quote capitalized word") where false positives
+ *  are common. */
+export function canonicalizeKnownSpeaker(raw: string): string | null {
+  const lower = raw.toLowerCase().trim();
+  if (KNOWN_SPEAKERS[lower]) return KNOWN_SPEAKERS[lower];
+  if (lower.startsWith("the ")) {
+    const stripped = lower.slice(4);
+    if (KNOWN_SPEAKERS[stripped]) return KNOWN_SPEAKERS[stripped];
+    if (stripped === "goddess" || stripped === "goddess of war" || stripped === "grey-eyed goddess") return "Athena";
+    if (stripped === "god" || stripped === "god of the sea" || stripped === "earthshaker") return "Poseidon";
+    if (stripped === "king" || stripped === "king of the gods" || stripped === "father") return "Zeus";
+    if (stripped === "old man" || stripped === "old swineherd" || stripped === "swineherd") return "Eumaeus";
+    if (stripped === "queen") return "Penelope";
+    if (stripped === "boy" || stripped === "young man" || stripped === "prince") return "Telemachus";
+    if (stripped === "stranger" || stripped === "beggar" || stripped === "tramp" || stripped === "wanderer") return "Odysseus";
+    if (stripped === "messenger") return "Hermes";
+    if (stripped === "bard" || stripped === "singer") return "Phemius";
+    if (stripped === "nurse") return "Eurycleia";
+  }
+  // Honorifics: "Queen Penelope" → "Penelope"
+  for (const key of Object.keys(KNOWN_SPEAKERS)) {
+    if (lower.endsWith(" " + key)) return KNOWN_SPEAKERS[key];
+  }
+  return null;
 }
 
 /** Convert a canonical speaker name to a stable narrator id slug. */

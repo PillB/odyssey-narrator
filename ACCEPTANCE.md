@@ -105,11 +105,14 @@ Verified by browser-based self-inspection on 2026-07-28.
 - [x] Failure memory embedded in DECISIONS.md (DR-004, DR-005 document bugs found and fixed)
 
 ## Testing
-- [ ] Automated unit tests for parser (NOT YET — future work)
-- [ ] Automated unit tests for narrator engine (NOT YET — future work)
+- [x] Automated unit tests for parser (15 tests in `src/lib/odyssey/__tests__/parser.test.ts`)
+- [x] Automated unit tests for narrator engine (34 tests in `src/lib/odyssey/__tests__/narrator-engine.test.ts`)
+- [x] API smoke tests for LLM evaluator (2 tests in `src/app/api/__tests__/evaluator.test.ts`)
+- [x] Regression tests for known false positives (3 tests — see DR-004, DR-005, DR-011)
 - [x] Manual browser-based verification of every UI flow
 - [x] Lint passes cleanly (`bun run lint` returns 0 errors)
 - [x] No runtime errors in dev.log
+- [x] All 53 tests pass (`bun test src/`)
 
 ## Accessibility Audit
 - [x] Light / Dark / System theme

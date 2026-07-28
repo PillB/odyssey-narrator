@@ -34,7 +34,7 @@
 
 import type { Block, Chapter } from "./types";
 import { ODYSSEUS_INNER_BOOKS } from "./chapters";
-import { canonicalizeSpeaker, speakerToId } from "./narrator-engine-canon";
+import { canonicalizeSpeaker, canonicalizeKnownSpeaker, speakerToId } from "./narrator-engine-canon";
 import { parseChapter } from "./parser";
 
 /**
@@ -45,9 +45,10 @@ import { parseChapter } from "./parser";
  *   • "Foo," said the goddess.
  *   • "Foo" — Zeus
  *   • Athena said, "Foo."
+ *   • "Foo." Zeus looked genuinely startled.   (mid-paragraph name)
  */
 function parseSpeaker(raw: string): string | undefined {
-  // Pattern: "..." said Name.
+  // Pattern 1: "..." said Name.
   let m = raw.match(/[""'].*[""']\s*[,\-—]?\s*(?:said|cried|asked|answered|replied|whispered|shouted|began|continued|added|remarked|observed)\s+(?:([A-Z][a-zA-Z]+)|([a-z]+))\b/);
   if (m) {
     const name = (m[1] || m[2] || "").trim();
@@ -56,7 +57,7 @@ function parseSpeaker(raw: string): string | undefined {
       if (canon) return canon;
     }
   }
-  // Pattern: "..." Name said.
+  // Pattern 2: "..." Name said.
   m = raw.match(/[""'].*[""']\s*[,\-—]?\s+(?:([A-Z][a-zA-Z]+)|([a-z]+))\s+(?:said|cried|asked|answered|replied|whispered|shouted)/);
   if (m) {
     const name = (m[1] || m[2] || "").trim();
@@ -65,19 +66,60 @@ function parseSpeaker(raw: string): string | undefined {
       if (canon) return canon;
     }
   }
-  // Pattern: Name said, "..."
+  // Pattern 3: Name said, "..."
   m = raw.match(/^([A-Z][a-zA-Z]+)\s+(?:said|cried|asked|answered|replied|whispered|shouted|began),?\s+[""']/);
   if (m) {
     const canon = canonicalizeSpeaker(m[1]);
     if (canon) return canon;
   }
-  // Pattern: "..." — Zeus  /  "..." (Zeus)
+  // Pattern 4: "..." — Zeus  /  "..." (Zeus)
   m = raw.match(/[""'].*[""']\s*[—\-]\s*([A-Z][a-zA-Z]+)/);
   if (m) {
     const canon = canonicalizeSpeaker(m[1]);
     if (canon) return canon;
   }
+  // Pattern 5 (NEW): "Foo." Name [any verb] — catches mid-paragraph
+  // attribution like `"Child, what a thing to say." Zeus looked genuinely
+  // startled. "How could I ever forget Odysseus?"`. After the closing quote,
+  // a capitalized proper noun appears before any lowercase word.
+  // Uses the strict canonicalizer so we only accept KNOWN speakers —
+  // otherwise we'd false-positive on sentence-initial adverbs like
+  // "Listen", "Take", "Apparently", etc.
+  m = raw.match(/[""']\s*([A-Z][a-zA-Z]{2,})\s+(?:[a-z]+)/);
+  if (m) {
+    const canon = canonicalizeKnownSpeaker(m[1]);
+    if (canon) return canon;
+  }
   return undefined;
+}
+
+/**
+ * Detect pronoun attribution in a dialogue paragraph: `"Foo," he said` etc.
+ * Returns the pronoun ("he", "she", "they") or undefined.
+ */
+function detectPronounAttribution(raw: string): "he" | "she" | "they" | undefined {
+  // After a closing quote, look for "he said" / "she said" / "they said" etc.
+  const m = raw.match(/[""']\s*[,\-—]?\s*(he|she|they)\s+(?:said|cried|asked|answered|replied|whispered|shouted|began|continued|added|remarked|observed)\b/i);
+  if (!m) return undefined;
+  return m[1].toLowerCase() as "he" | "she" | "they";
+}
+
+/**
+ * Scan a narration paragraph for the most-recently-mentioned known character.
+ * Used to resolve pronoun-attributed dialogue ("he said" → which "he"?).
+ * Returns the canonical name, or undefined if no character is mentioned.
+ * Uses the strict canonicalizer so we don't pick up random proper nouns
+ * (place names, etc.) as characters.
+ */
+function findLastMentionedCharacter(text: string): string | undefined {
+  const matches = text.match(/\b([A-Z][a-zA-Z]+)\b/g);
+  if (!matches) return undefined;
+  let last: string | undefined;
+  for (const m of matches) {
+    const canon = canonicalizeKnownSpeaker(m);
+    if (canon) last = canon;
+  }
+  return last;
 }
 
 /** Convert a speaker name to a stable narrator id slug. (re-export) */
@@ -122,8 +164,29 @@ function inferNarrator(
           reasoning: `Quoted speech explicitly attributed to "${speaker}".`,
         };
       }
-      // No explicit attribution: try to inherit from previous dialogue speaker,
-      // otherwise mark as unknown (user can correct).
+      // No explicit name attribution. Check for pronoun attribution
+      // ("he said", "she said", "they said") and resolve via the
+      // last-mentioned character in the preceding narration.
+      const pronoun = detectPronounAttribution(block.raw);
+      if (pronoun && ctx.lastMentionedCharacter) {
+        const mentionedId = speakerToId(ctx.lastMentionedCharacter);
+        return {
+          narratorId: mentionedId,
+          confidence: Math.min(0.85, ctx.lastMentionedConfidence + 0.1),
+          reasoning: `Quoted speech with pronoun attribution ("${pronoun} said"); resolved to "${ctx.lastMentionedCharacter}" from the preceding narration.`,
+        };
+      }
+      // No pronoun attribution either. Try the last-mentioned character
+      // directly (lower confidence — this is a continuation guess).
+      if (ctx.lastMentionedCharacter) {
+        const mentionedId = speakerToId(ctx.lastMentionedCharacter);
+        return {
+          narratorId: mentionedId,
+          confidence: 0.55,
+          reasoning: `Quoted speech with no attribution; guessed "${ctx.lastMentionedCharacter}" from the most-recent narration. Marked low-confidence — please verify.`,
+        };
+      }
+      // Fall back to inheriting from previous dialogue turn.
       if (ctx.lastDialogueSpeakerId) {
         return {
           narratorId: ctx.lastDialogueSpeakerId,
@@ -194,6 +257,12 @@ function isNarratorReentry(text: string): boolean {
 
 interface InferenceContext {
   lastDialogueSpeakerId: string | null;
+  /** Last-mentioned canonical character name in narration (used to resolve
+   *  pronoun-attributed dialogue like `"Foo," he said`). */
+  lastMentionedCharacter: string | null;
+  /** Confidence in lastMentionedCharacter: 0.6 if it's just a name mentioned
+   *  in passing, 0.85 if the narration was about that character acting. */
+  lastMentionedConfidence: number;
   lastBlockWasSceneBreak: boolean;
   afterHandover: boolean;
   afterHandback: boolean;
@@ -207,6 +276,8 @@ interface InferenceContext {
 export function analyzeChapter(chapter: Chapter): Chapter {
   const ctx: InferenceContext = {
     lastDialogueSpeakerId: null,
+    lastMentionedCharacter: null,
+    lastMentionedConfidence: 0,
     lastBlockWasSceneBreak: false,
     afterHandover: false,
     afterHandback: false,
@@ -215,8 +286,12 @@ export function analyzeChapter(chapter: Chapter): Chapter {
   const blocks = chapter.blocks.map((block) => {
     // Detect the handover at the top of Book 9 (heuristic: a narration block
     // that explicitly mentions stepping back / handing over / Odysseus speaks).
+    // Permissive: matches "hand", "handed", "hand over", "I am Odysseus",
+    // "I shall tell", "I will tell", etc.
     if (chapter.number === 9 && block.kind === "narration" && !ctx.afterHandover) {
-      if (/\b(hand|step|step back|hand over|handover|hands over|gives way|yields|withdraws|Odysseus\b.*\bsaid|takes? up|takes? the floor|begins? to speak)\b/i.test(block.text)) {
+      if (/\b(hand\w*|step|step back|gives?\s+way|yields?|withdraws?|takes?\s+up|takes?\s+the\s+floor|begins?\s+to\s+speak)\b/i.test(block.text)
+          || /\bI\s+(am|shall|will|must)\s+(?:Odysseus|tell|speak|begin)\b/i.test(block.text)
+          || /\bOdysseus\b.*\b(said|told|began|continued|spoke|his\s+tale|his\s+story)\b/i.test(block.text)) {
         ctx.afterHandover = true;
       }
     }
@@ -226,14 +301,43 @@ export function analyzeChapter(chapter: Chapter): Chapter {
     // Update context for the next block.
     if (block.kind === "scene_break") {
       ctx.lastBlockWasSceneBreak = true;
-      // Scene break inside an inner-narration book: the guide may briefly re-enter
-      // in the next block; we let isNarratorReentry decide.
+      // Scene breaks reset the dialogue + character context — a new scene
+      // may have completely different speakers.
+      ctx.lastDialogueSpeakerId = null;
+      ctx.lastMentionedCharacter = null;
+      ctx.lastMentionedConfidence = 0;
     } else {
       ctx.lastBlockWasSceneBreak = false;
     }
-    if (block.kind === "dialogue" && confidence >= 0.9) {
-      ctx.lastDialogueSpeakerId = narratorId;
+
+    // Track the last-mentioned character from narration blocks. We weight
+    // by recency: the most recent narration block's last-mentioned character
+    // wins, with confidence proportional to how strongly the narration was
+    // "about" that character (proxied by whether the name appears early).
+    if (block.kind === "narration") {
+      const mentioned = findLastMentionedCharacter(block.text);
+      if (mentioned) {
+        ctx.lastMentionedCharacter = mentioned;
+        const firstMentionIdx = block.text.indexOf(mentioned);
+        ctx.lastMentionedConfidence = firstMentionIdx < 200 ? 0.75 : 0.6;
+      }
     }
+
+    // Track last dialogue speaker (for inheritance fallback).
+    if (block.kind === "dialogue" && confidence >= 0.7) {
+      ctx.lastDialogueSpeakerId = narratorId;
+      // Also update lastMentionedCharacter: if the dialogue was attributed
+      // to a specific character, that character is now the most salient.
+      if (narratorId.startsWith("speaker:")) {
+        const name = narratorId.slice("speaker:".length).replace(/-/g, " ");
+        ctx.lastMentionedCharacter = name
+          .split(/\s+/)
+          .map((w) => w[0].toUpperCase() + w.slice(1))
+          .join(" ");
+        ctx.lastMentionedConfidence = 0.85;
+      }
+    }
+
     // If we're back from a re-entry (i.e. previous block was narrator inside
     // an inner-narration book), reset the "afterHandover" flag once we exit
     // the inner narration at the end of Book 12.

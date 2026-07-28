@@ -9,10 +9,11 @@ import { NarratorLegend } from "@/components/odyssey/NarratorLegend";
 import { EditorPanel } from "@/components/odyssey/EditorPanel";
 import { SettingsPanel } from "@/components/odyssey/SettingsPanel";
 import { SearchPanel } from "@/components/odyssey/SearchPanel";
+import { BookmarksPanel } from "@/components/odyssey/BookmarksPanel";
 import type { Block } from "@/lib/odyssey/types";
 import { cn } from "@/lib/utils";
 
-type RightPanelKind = "legend" | "editor" | "settings" | "search";
+type RightPanelKind = "legend" | "editor" | "settings" | "search" | "bookmarks";
 
 export default function Page() {
   const [leftOpen, setLeftOpen] = useState(true);
@@ -129,6 +130,10 @@ export default function Page() {
           setRightOpen(true);
           setRightPanelTarget("search");
         }}
+        onOpenBookmarks={() => {
+          setRightOpen(true);
+          setRightPanelTarget("bookmarks");
+        }}
       />
       <div className="flex-1 flex min-h-0">
         {/* Left sidebar */}
@@ -172,6 +177,9 @@ export default function Page() {
               onClose={() => setRightPanelTarget("legend")}
               onJump={handleJumpFromSearch}
             />
+          )}
+          {effectiveRightPanel === "bookmarks" && (
+            <BookmarksPanel onJump={handleJumpFromSearch} />
           )}
         </aside>
       </div>

@@ -25,9 +25,10 @@ const FOOTNOTE_DEF_RE = /^\[\^(\d+)\]:\s*(.*)$/;
 const NOTES_HEADER_RE = /^##\s+NOTES\s+TO\s+BOOK/i;
 const FULL_ITALIC_RE = /^\*[^*]+(?:\*[^*]+)*\*$/; // paragraph wrapped in single *…*
 
-/** Strip markdown emphasis / footnote refs to get plain text. */
+/** Strip markdown emphasis / footnote refs / heading markers to get plain text. */
 export function stripMarkdown(input: string): string {
   return input
+    .replace(/^#{1,3}\s+/, "") // leading heading markers
     .replace(/\[\^(\d+)\]/g, "($1)") // [^3] → (3)
     .replace(/\*\*([^*]+)\*\*/g, "$1") // **bold** → bold
     .replace(/\*([^*]+)\*/g, "$1") // *italic* → italic
@@ -36,14 +37,32 @@ export function stripMarkdown(input: string): string {
     .trim();
 }
 
-/** Split a chapter's raw markdown into paragraph-level chunks. */
+/** Split a chapter's raw markdown into paragraph-level chunks.
+ *  Splits on blank lines AND on heading boundaries (so that
+ *  `# H1\n### H3\n` becomes two separate header chunks). */
 function splitParagraphs(raw: string): string[] {
-  // Normalise CRLF, then split on blank lines.
-  return raw
-    .replace(/\r\n/g, "\n")
+  const normalized = raw.replace(/\r\n/g, "\n");
+  // First split on blank lines.
+  const rough = normalized
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
+  // Then split any chunk that contains multiple heading lines into separate
+  // heading chunks. e.g. "# H1\n### H3" → ["# H1", "### H3"].
+  const out: string[] = [];
+  for (const chunk of rough) {
+    const lines = chunk.split("\n");
+    // If every line starts with #, treat each as its own header chunk.
+    const isAllHeadings = lines.every((l) => /^(#{1,3})\s+/.test(l) || /^---+\s*$/.test(l));
+    if (isAllHeadings && lines.length > 1) {
+      for (const line of lines) {
+        if (line.trim()) out.push(line.trim());
+      }
+    } else {
+      out.push(chunk);
+    }
+  }
+  return out;
 }
 
 /** Classify a single paragraph chunk into a BlockKind (no narrator inference). */

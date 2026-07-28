@@ -174,3 +174,89 @@ backend.
 cookie usage". LocalStorage is sufficient for a single-user reading
 experience. If cross-device sync is added later, it should be opt-in and
 should not change the local-first architecture.
+
+---
+
+## DR-011 — Context-aware dialogue resolution (last-mentioned character)
+
+**Decision**: Track the last-mentioned canonical character in narration
+blocks. When dialogue has pronoun attribution (`"Foo," he said`), resolve
+the pronoun to that character.
+
+**Alternatives**:
+- (a) Mark all pronoun-attributed dialogue as "Uncertain".
+- (b) Use an LLM to resolve pronouns.
+
+**Rationale**: (a) leaves ~30% of dialogue unclassified — too much for a
+good reading experience. (b) is too slow for an inline parser and breaks
+determinism. The chosen approach is fast, deterministic, and gets ~80% of
+pronoun cases right. The remaining 20% fall through to "Uncertain" and the
+user (or the LLM evaluator) can correct them.
+
+Scene breaks reset the context — a new scene may have completely different
+speakers. Confidence is weighted by how early in the narration the character
+is mentioned (early mention = the paragraph is "about" them = higher
+confidence).
+
+---
+
+## DR-012 — Strict canonicalizer for Pattern 5 (post-quote capitalized word)
+
+**Decision**: Pattern 5 (`"Foo." Name [verb]`) uses
+`canonicalizeKnownSpeaker` (strict) instead of `canonicalizeSpeaker`
+(permissive). The strict variant only accepts names in the `KNOWN_SPEAKERS`
+table; the permissive variant accepts any capitalized proper noun.
+
+**Alternatives**:
+- (a) Use the permissive canonicalizer for Pattern 5.
+- (b) Add a stoplist of common sentence-initial adverbs.
+
+**Rationale**: (a) is what we initially shipped, and it false-positive'd on
+"Listen", "Apparently", "Take" — all common sentence-initial words that
+follow a closing quote. (b) is a never-ending game of whack-a-mole. The
+strict canonicalizer is the right tradeoff: Pattern 5 only fires when we
+recognize the name, which is the case it was designed for.
+
+---
+
+## DR-013 — Bookmarks and annotations as margin hover affordances
+
+**Decision**: Bookmark + annotation buttons appear in the left margin on
+hover, not as always-visible icons. Annotations render as a styled bubble
+below the paragraph.
+
+**Alternatives**:
+- (a) Always-visible icons next to every paragraph.
+- (b) Right-click context menu.
+
+**Rationale**: (a) clutters the reading experience — the spec emphasizes
+"beautiful whitespace". (b) is hidden and not discoverable. Hover-revealed
+margin icons are the standard pattern (used by Medium, NYT, GitHub) and
+match the Art Nouveau minimalism. The amber bookmark indicator on the
+paragraph itself is always visible once a bookmark exists, so the reader
+can see at a glance which paragraphs they've marked.
+
+---
+
+## DR-014 — LLM evaluator as server-side API + opt-in button
+
+**Decision**: The LLM adversarial evaluator lives at `POST /api/evaluator`
+(server-side, uses z-ai-web-dev-sdk) and is invoked on-demand from the
+editor panel via an "Ask LLM to critique" button. Proposals are
+suggestions — the user must click "Accept proposal" to apply them.
+
+**Alternatives**:
+- (a) Run the LLM over every block on chapter load.
+- (b) Call the LLM from the client directly.
+
+**Rationale**: (a) would be slow (25 chapters × ~250 blocks × ~3s per
+LLM call = ~5 hours) and would burn API quota on blocks the user doesn't
+care about. (b) violates the z-ai-web-dev-sdk "backend only" constraint
+and would expose the API key. The chosen approach is on-demand, server-
+side, and user-initiated — the user picks the specific block they want a
+second opinion on, and the LLM's proposal is always overridable.
+
+The LLM is given ~800 chars of surrounding context (3 blocks before + 3
+after) plus the current narrator + reasoning. The system prompt instructs
+it to be adversarial: try to PROVE the current assignment is wrong. This
+matches the Phase 3 spec.

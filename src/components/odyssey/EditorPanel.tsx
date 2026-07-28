@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { X, GitMerge, Pencil } from "lucide-react";
+import { X, GitMerge, Pencil, Sparkles, Check, AlertCircle } from "lucide-react";
 import { useOdysseyStore } from "@/lib/odyssey/store";
-import type { Block } from "@/lib/odyssey/types";
+import type { Block, Chapter } from "@/lib/odyssey/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,15 @@ interface EditorPanelProps {
   /** Currently-selected block (when in inline editor mode). */
   selectedBlock: Block | null;
   onClose: () => void;
+}
+
+interface LLMProposal {
+  proposedNarratorId: string;
+  proposedSpeaker?: string;
+  critique: string;
+  confidence: number;
+  alternatives: string[];
+  parseError?: boolean;
 }
 
 /**
@@ -37,6 +46,56 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [mergeTarget, setMergeTarget] = useState("");
+
+  // LLM adversarial-evaluator state.
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmProposal, setLlmProposal] = useState<LLMProposal | null>(null);
+  const [llmError, setLlmError] = useState<string | null>(null);
+
+  /** Call the /api/evaluator endpoint with the selected block + context. */
+  const requestLLMEvaluation = async () => {
+    if (!selectedBlock) return;
+    setLlmLoading(true);
+    setLlmError(null);
+    setLlmProposal(null);
+    try {
+      // Build surrounding context from the chapter: ~3 blocks before + 3 after.
+      const chapter = chapters.get(selectedBlock.chapterId) as Chapter | undefined;
+      let context = "";
+      if (chapter) {
+        const idx = selectedBlock.index;
+        const before = chapter.blocks.slice(Math.max(0, idx - 3), idx);
+        const after = chapter.blocks.slice(idx + 1, idx + 4);
+        context = [...before, selectedBlock, ...after]
+          .map((b) => b.text.slice(0, 200))
+          .join("\n\n");
+      }
+      const res = await fetch("/api/evaluator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapterId: selectedBlock.chapterId,
+          blockId: selectedBlock.id,
+          raw: selectedBlock.raw,
+          kind: selectedBlock.kind,
+          inferredNarratorId: selectedBlock.inferredNarratorId,
+          confidence: selectedBlock.confidence,
+          reasoning: selectedBlock.reasoning,
+          surroundingContext: context,
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? `HTTP ${res.status}`);
+      }
+      const proposal = (await res.json()) as LLMProposal;
+      setLlmProposal(proposal);
+    } catch (e) {
+      setLlmError((e as Error).message);
+    } finally {
+      setLlmLoading(false);
+    }
+  };
 
   if (!selectedBlock) {
     return (
@@ -119,6 +178,67 @@ export function EditorPanel({ selectedBlock, onClose }: EditorPanelProps) {
                 {selectedBlock.reasoning}
               </div>
             </div>
+          </div>
+
+          {/* LLM adversarial evaluator (Phase 3) */}
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Sparkles className="h-3 w-3" /> LLM adversarial evaluator
+            </Label>
+            <Button
+              size="sm"
+              className="mt-1 h-7 text-xs w-full"
+              disabled={llmLoading}
+              onClick={requestLLMEvaluation}
+            >
+              <Sparkles className={cn("h-3 w-3 mr-1", llmLoading && "animate-pulse")} />
+              {llmLoading ? "Evaluating…" : "Ask LLM to critique"}
+            </Button>
+            {llmError && (
+              <div className="mt-1 text-[10px] text-destructive flex items-start gap-1">
+                <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                <span className="break-words">{llmError}</span>
+              </div>
+            )}
+            {llmProposal && (
+              <div className="mt-2 text-xs space-y-1.5 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-400/40 dark:border-amber-700/40 p-2 rounded">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">LLM proposes:</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    conf {(llmProposal.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="font-mono text-[11px] bg-background/60 px-1.5 py-0.5 rounded">
+                  {llmProposal.proposedNarratorId}
+                </div>
+                <p className="text-[11px] italic text-foreground/80">{llmProposal.critique}</p>
+                {llmProposal.alternatives && llmProposal.alternatives.length > 0 && (
+                  <div className="text-[10px] text-muted-foreground">
+                    Alternatives: {llmProposal.alternatives.join(", ")}
+                  </div>
+                )}
+                {llmProposal.parseError && (
+                  <div className="text-[10px] text-amber-700 dark:text-amber-400">
+                    Note: LLM response was not parseable JSON; no automatic proposal.
+                  </div>
+                )}
+                {llmProposal.proposedNarratorId !== currentNarratorId && !llmProposal.parseError && (
+                  <Button
+                    size="sm"
+                    className="h-6 text-[10px] w-full mt-1"
+                    onClick={() => {
+                      setBlockNarrator(selectedBlock.id, llmProposal.proposedNarratorId);
+                      setLlmProposal(null);
+                    }}
+                  >
+                    <Check className="h-3 w-3 mr-1" /> Accept proposal
+                  </Button>
+                )}
+              </div>
+            )}
+            <p className="mt-1 text-[10px] text-muted-foreground/70">
+              Calls the LLM (z-ai-web-dev-sdk) on the server. Proposals are suggestions — accept or ignore.
+            </p>
           </div>
 
           {/* Reassign narrator */}
