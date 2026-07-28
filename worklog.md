@@ -209,3 +209,52 @@ Stage Summary:
 - Lint clean
 - Git committed
 - Dev server running with no errors
+
+---
+Task ID: 4
+Agent: main (orchestrator)
+Task: Execute full Playwright suite, root-cause all failures, fix bugs,
+  add tests for narrator modifications + bookmarks/annotations, commit.
+
+Work Log:
+- Executed full Playwright suite (62 tests across 10 categories)
+- Initial run: 45/53 passed — identified 8 failures
+- Root cause analyses:
+  1. Panel toggle UX bug: 'Narrators' button just toggled rightOpen,
+     didn't switch panel content to legend → replaced with onShowLegend
+  2. Controlled input bug: displayNarrator.name/color/accent could be
+     undefined after a merge → added defensive defaults
+  3. Annotation panel bug: resolveBlock returned null if chapter not loaded
+     → returns partial info with block ID fallback
+  4. Variable shadowing bug: 'text' from annotation overwritten by 'text'
+     from resolveBlock → renamed to annotationText/paragraphText
+  5. onJump null pointer: block.id/block.chapterId could be null when
+     chapter not loaded → use blockId directly
+  6. Test bugs: CSS uppercase makes textContent mixed case; CSS transition
+     leaves 1px border when closed; Playwright fill() needed for React events
+
+- Fixed all 6 root causes
+- Added 5 new tests for narrator modifications:
+  * Click dialogue paragraph to select character narrator
+  * Rename narrator
+  * Recolor narrator (color + accent)
+  * Merge narrators
+  * Reset all corrections
+- Added 4 new tests for bookmarks/annotations:
+  * Add annotation (hover → click → fill → save)
+  * Annotation persists across reload
+  * Annotation appears in panel (with correct text)
+  * Delete annotation (clear localStorage)
+- Final run: 62/62 PASS — 100% pass rate, 0 console errors
+- All 59 unit tests pass, lint clean
+- Committed as v4
+
+Stage Summary:
+- v4 achieves 100% Playwright test pass rate (62/62)
+- Fixed 3 real app bugs (panel toggle UX, controlled input, annotation panel)
+- Fixed 3 test bugs (CSS uppercase, CSS transition, React event handling)
+- Added 9 new tests (5 narrator modification + 4 annotation)
+- Zero console errors
+- All 25 chapters render correctly
+- All user flows verified: editor, settings, bookmarks, annotations, search,
+  LLM evaluator, folding, export API
