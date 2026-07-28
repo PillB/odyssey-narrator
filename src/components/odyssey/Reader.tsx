@@ -212,6 +212,7 @@ export function Reader({ onBlockSelect }: ReaderProps) {
                 block={g.block}
                 dropCap={g.showDrop}
                 onClick={(b) => onBlockSelect(b)}
+                chapterBlocks={chapter?.blocks}
               />
             );
           }
@@ -232,7 +233,7 @@ export function Reader({ onBlockSelect }: ReaderProps) {
         {showFootnotesInline && footnoteSection.length > 0 && (
           <section className="mt-16 pt-8 border-t">
             {footnoteSection.map((block) => (
-              <Paragraph key={block.id} block={block} onClick={(b) => onBlockSelect(b)} />
+              <Paragraph key={block.id} block={block} onClick={(b) => onBlockSelect(b)} chapterBlocks={chapter?.blocks} />
             ))}
           </section>
         )}

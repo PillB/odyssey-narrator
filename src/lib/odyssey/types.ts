@@ -72,6 +72,15 @@ export interface Block {
   footnoteNumber?: number;
   /** Speaker name as parsed from surrounding text, when kind === "dialogue". */
   parsedSpeaker?: string;
+  /** When true, the speaker was resolved via pronoun attribution ("he said")
+   *  using context from a preceding narration block. The speaker name is in
+   *  `contextSpeaker`. When the context-providing narration is folded/hidden,
+   *  the reader loses the speaker reference — so the renderer should inject
+   *  "(SpeakerName)" after the attribution verb. */
+  contextDependent?: boolean;
+  /** The canonical speaker name resolved from context (set when
+   *  contextDependent is true). */
+  contextSpeaker?: string;
   /** Heading level (1/2/3), when kind === "header". */
   headingLevel?: 1 | 2 | 3;
 }

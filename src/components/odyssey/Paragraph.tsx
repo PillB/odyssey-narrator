@@ -3,8 +3,10 @@
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Bookmark, MessageSquarePlus, X } from "lucide-react";
-import type { Block } from "@/lib/odyssey/types";
+import type { Block, Chapter } from "@/lib/odyssey/types";
 import { useOdysseyStore, useBlockNarrator } from "@/lib/odyssey/store";
+import { resolveBlockNarrator } from "@/lib/odyssey/identity";
+import { getContextInjectedRaw } from "@/lib/odyssey/context-injection";
 
 interface ParagraphProps {
   block: Block;
@@ -12,13 +14,15 @@ interface ParagraphProps {
   dropCap?: boolean;
   /** Optional onClick for editor mode. */
   onClick?: (block: Block) => void;
+  /** The full chapter blocks array (for context injection detection). */
+  chapterBlocks?: Block[];
 }
 
 /**
  * Paragraph — renders a single block with its narrator's color stripe,
  * confidence indicator, and editor affordances.
  */
-export function Paragraph({ block, dropCap, onClick }: ParagraphProps) {
+export function Paragraph({ block, dropCap, onClick, chapterBlocks }: ParagraphProps) {
   const narrator = useBlockNarrator(block);
   const editorMode = useOdysseyStore((s) => s.editor.editorMode);
   const showNarratorLabels = useOdysseyStore((s) => s.reader.showNarratorLabels);
@@ -29,6 +33,8 @@ export function Paragraph({ block, dropCap, onClick }: ParagraphProps) {
   const annotations = useOdysseyStore((s) => s.annotations);
   const toggleBookmark = useOdysseyStore((s) => s.toggleBookmark);
   const setAnnotation = useOdysseyStore((s) => s.setAnnotation);
+  const visibility = useOdysseyStore((s) => s.visibility);
+  const editor = useOdysseyStore((s) => s.editor);
 
   const [annotating, setAnnotating] = useState(false);
   const [annotationDraft, setAnnotationDraft] = useState("");
@@ -46,8 +52,27 @@ export function Paragraph({ block, dropCap, onClick }: ParagraphProps) {
     spacious: "mb-6",
   }[paragraphSpacing];
 
-  // Render by block kind.
-  const content = useMemo(() => renderBlockContent(block), [block]);
+  // Check if this dialogue block needs contextual speaker injection
+  // (when the preceding narration that identifies the speaker is folded).
+  const contextInjection = useMemo(() => {
+    if (!chapterBlocks || block.kind !== "dialogue") {
+      return { needsInjection: false, modifiedRaw: block.raw, speakerName: "" };
+    }
+    const resolvedNarratorIds = new Map<string, string>();
+    for (const b of chapterBlocks) {
+      resolvedNarratorIds.set(b.id, resolveBlockNarrator(b, editor.merges, editor.blockCorrections));
+    }
+    return getContextInjectedRaw(block, chapterBlocks, resolvedNarratorIds, visibility);
+  }, [block, chapterBlocks, editor.merges, editor.blockCorrections, visibility]);
+
+  // Render by block kind. Use modifiedRaw if context injection is needed.
+  const effectiveBlock = contextInjection.needsInjection
+    ? { ...block, raw: contextInjection.modifiedRaw }
+    : block;
+  const content = useMemo(
+    () => renderBlockContent(effectiveBlock, narrator?.color),
+    [effectiveBlock, narrator?.color],
+  );
 
 
   if (block.kind === "scene_break") {
@@ -296,11 +321,12 @@ export function Paragraph({ block, dropCap, onClick }: ParagraphProps) {
 }
 
 /** Render block content as inline-formatted text.
- *  Handles italics (**bold**, *italic*) and footnote refs ([^n]) minimally. */
-function renderBlockContent(block: Block): React.ReactNode {
+ *  Handles italics (**bold**, *italic*) and footnote refs ([^n]) minimally.
+ *  Also handles injected context speaker tags like (Zeus). */
+function renderBlockContent(block: Block, narratorColor?: string): React.ReactNode {
   // For dialogue, parse out the spoken text vs. attribution.
   if (block.kind === "dialogue") {
-    return <DialogueContent raw={block.raw} />;
+    return <DialogueContent raw={block.raw} narratorColor={narratorColor} />;
   }
   return <InlineMarkdown raw={block.raw} />;
 }
@@ -327,18 +353,41 @@ function InlineMarkdown({ raw }: { raw: string }) {
   );
 }
 
-/** Dialogue content: emphasize spoken text, dim attribution. */
-function DialogueContent({ raw }: { raw: string }) {
+/** Dialogue content: emphasize spoken text, dim attribution.
+ *  Detects injected context speaker tags like "(Zeus)" and renders them
+ *  as colored badges with the narrator's color. */
+function DialogueContent({ raw, narratorColor }: { raw: string; narratorColor?: string }) {
   // Find quoted segments and attribution.
   const quoteMatch = raw.match(/^([""'])(.*?)\1(.*)$/s);
   if (quoteMatch) {
     const quote = quoteMatch[2];
-    const attribution = quoteMatch[3]?.trim();
+    let attribution = quoteMatch[3]?.trim() ?? "";
+    // Check for injected speaker tag: "(SpeakerName)" anywhere in attribution
+    const speakerMatch = attribution.match(/\(([^)]+)\)/);
+    let speakerTag: string | null = null;
+    if (speakerMatch) {
+      speakerTag = speakerMatch[1];
+      // Remove the tag from the attribution text (we'll render it separately)
+      attribution = attribution.replace(/\([^)]+\)/, "").trim();
+    }
     return (
       <>
         <span className="italic">"{quote}"</span>
         {attribution && (
           <span className="text-muted-foreground not-italic"> {attribution}</span>
+        )}
+        {speakerTag && (
+          <span
+            className="ml-1 inline-block align-baseline text-[0.65em] font-medium px-1.5 py-0.5 rounded-sm border"
+            style={{
+              color: narratorColor || "var(--muted-foreground)",
+              backgroundColor: `${narratorColor || "#888"}22`,
+              borderColor: `${narratorColor || "#888"}44`,
+            }}
+            title={`Speaker referenced from folded narration: ${speakerTag}`}
+          >
+            {speakerTag}
+          </span>
         )}
       </>
     );

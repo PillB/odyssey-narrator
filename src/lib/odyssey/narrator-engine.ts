@@ -133,7 +133,7 @@ function inferNarrator(
   block: Block,
   chapterNumber: number,
   ctx: InferenceContext,
-): { narratorId: string; confidence: number; reasoning: string } {
+): { narratorId: string; confidence: number; reasoning: string; contextDependent?: boolean; contextSpeaker?: string } {
   switch (block.kind) {
     case "header":
     case "scene_break":
@@ -174,6 +174,8 @@ function inferNarrator(
           narratorId: mentionedId,
           confidence: Math.min(0.85, ctx.lastMentionedConfidence + 0.1),
           reasoning: `Quoted speech with pronoun attribution ("${pronoun} said"); resolved to "${ctx.lastMentionedCharacter}" from the preceding narration.`,
+          contextDependent: true,
+          contextSpeaker: ctx.lastMentionedCharacter,
         };
       }
       // Multi-paragraph dialogue co-reference: if the immediately preceding
@@ -310,7 +312,7 @@ export function analyzeChapter(chapter: Chapter): Chapter {
       }
     }
 
-    const { narratorId, confidence, reasoning } = inferNarrator(block, chapter.number, ctx);
+    const { narratorId, confidence, reasoning, contextDependent, contextSpeaker } = inferNarrator(block, chapter.number, ctx);
 
     // Update context for the next block.
     if (block.kind === "scene_break") {
@@ -373,6 +375,8 @@ export function analyzeChapter(chapter: Chapter): Chapter {
       inferredNarratorId: narratorId,
       confidence,
       reasoning,
+      contextDependent,
+      contextSpeaker,
       parsedSpeaker:
         block.kind === "dialogue" ? parseSpeaker(block.raw) : undefined,
     };
