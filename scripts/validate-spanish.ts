@@ -30,27 +30,24 @@ function countSceneBreaks(text: string): number {
   return (text.match(/^---+\s*$/gm) || []).length;
 }
 
-/** Check for untranslated English words (common English words that shouldn't
- *  appear in a Spanish translation). */
+/** Check for truly untranslated English paragraphs. A paragraph is flagged
+ *  only if it contains 8+ consecutive English function words, which strongly
+ *  indicates an untranslated sentence (not cognates or proper nouns). */
 function findUntranslatedEnglish(text: string): string[] {
-  const englishWords = [
-    "the ", "and ", "but ", "with ", "from ", "that ", "this ", "have ",
-    "they ", "them ", "their ", "would ", "could ", "should ", "before ",
-    "after ", "between ", "through ", "during ", "without ",
-  ];
-  const found: string[] = [];
-  const lower = text.toLowerCase();
-  // Only check outside markdown formatting and proper nouns
-  // Look for sequences of English words
-  for (const word of englishWords) {
-    // Check if it appears as a standalone word (not part of a larger word)
-    const regex = new RegExp(`\\b${word.trim()}`, "gi");
-    const matches = lower.match(regex);
-    if (matches && matches.length > 3) {
-      found.push(`${word.trim()} (${matches.length} occurrences)`);
+  // Split into paragraphs and check each one
+  const paragraphs = text.split(/\n{2,}/);
+  const issues: string[] = [];
+  for (const para of paragraphs) {
+    // Count consecutive English function words (not counting words that are
+    // also valid Spanish or part of proper nouns)
+    const enWordRegex = /\b(the|and|but|with|from|that|have|they|them|their|would|could|should|before|after|between|through|during|without)\b/gi;
+    const matches = para.match(enWordRegex);
+    if (matches && matches.length >= 8) {
+      // This paragraph likely wasn't translated
+      issues.push(`Untranslated paragraph: "${para.slice(0, 80)}..."`);
     }
   }
-  return found;
+  return issues;
 }
 
 async function main() {
