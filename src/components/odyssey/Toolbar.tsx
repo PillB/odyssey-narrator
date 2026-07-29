@@ -53,6 +53,8 @@ export function Toolbar({
   const annotationCount = useOdysseyStore((s) => Object.keys(s.annotations).length);
   const language = useOdysseyStore((s) => s.reader.language);
   const setLanguage = useOdysseyStore((s) => s.setLanguage);
+  const fontSize = useOdysseyStore((s) => s.reader.fontSize);
+  const setReaderPref = useOdysseyStore((s) => s.setReaderPref);
   const currentIndex = CHAPTER_MANIFEST.findIndex((c) => c.slug === currentChapterId);
   const prev = currentIndex > 0 ? CHAPTER_MANIFEST[currentIndex - 1] : null;
   const next = currentIndex >= 0 && currentIndex < CHAPTER_MANIFEST.length - 1 ? CHAPTER_MANIFEST[currentIndex + 1] : null;
@@ -61,7 +63,7 @@ export function Toolbar({
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center gap-2 px-3 py-2 border-b bg-background/85 backdrop-blur-sm"
+      className="sticky top-0 z-30 flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-b bg-background/85 backdrop-blur-sm flex-wrap sm:flex-nowrap"
       role="banner"
     >
       <TooltipProvider delayDuration={300}>
@@ -108,6 +110,33 @@ export function Toolbar({
         </div>
 
         <div className="flex-1" />
+
+        {/* Quick font size controls (A- / A+) */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center rounded-md border border-border overflow-hidden" role="group" aria-label="Font size">
+              <button
+                type="button"
+                onClick={() => setReaderPref("fontSize", Math.max(12, fontSize - 1))}
+                className="px-2 h-8 text-sm font-bold transition-colors hover:bg-accent disabled:opacity-30"
+                disabled={fontSize <= 12}
+                aria-label="Decrease font size"
+              >
+                A−
+              </button>
+              <button
+                type="button"
+                onClick={() => setReaderPref("fontSize", Math.min(32, fontSize + 1))}
+                className="px-2 h-8 text-base font-bold transition-colors hover:bg-accent border-l border-border disabled:opacity-30"
+                disabled={fontSize >= 32}
+                aria-label="Increase font size"
+              >
+                A+
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Font size ({fontSize}px)</TooltipContent>
+        </Tooltip>
 
         {/* Language toggle (EN / ES) */}
         <Tooltip>

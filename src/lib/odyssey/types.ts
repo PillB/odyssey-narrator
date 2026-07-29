@@ -143,10 +143,10 @@ export interface ReaderPreferences {
   theme: "light" | "dark" | "system";
   fontSize: number; // px
   lineHeight: number; // multiplier
-  fontFamily: "serif" | "sans" | "wenkai";
+  fontFamily: "serif" | "sans" | "wenkai" | "lexend" | "atkinson";
   highContrast: boolean;
   reducedMotion: boolean;
-  colorBlindMode: "none" | "protanopia" | "deuteranopia" | "tritanopia";
+  colorBlindMode: "none" | "protanopia" | "deuteranopia" | "tritanopia" | "bw";
   showFootnotesInline: boolean;
   showNarratorLabels: boolean;
   paragraphSpacing: "compact" | "comfortable" | "spacious";

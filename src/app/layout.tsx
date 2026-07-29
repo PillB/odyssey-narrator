@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, Cormorant_Garamond } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Cormorant_Garamond, Lexend, Atkinson_Hyperlegible } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
@@ -20,6 +20,18 @@ const serifDisplay = Cormorant_Garamond({
   style: ["normal", "italic"],
 });
 
+const lexend = Lexend({
+  variable: "--font-lexend",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const atkinson = Atkinson_Hyperlegible({
+  variable: "--font-atkinson",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
 export const metadata: Metadata = {
   title: "The AI Odyssey — An Intelligent Reading Experience",
   description:
@@ -31,6 +43,17 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f0e6" },
+    { media: "(prefers-color-scheme: dark)", color: "#2a2418" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,7 +62,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${serifDisplay.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} ${serifDisplay.variable} ${lexend.variable} ${atkinson.variable} antialiased bg-background text-foreground`}
       >
         {children}
         <Toaster />

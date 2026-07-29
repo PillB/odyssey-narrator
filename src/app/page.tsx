@@ -65,13 +65,18 @@ export default function Page() {
       const isDark = theme === "dark" || (theme === "system" && prefersDark);
       html.classList.toggle("dark", isDark);
       html.classList.toggle("high-contrast", highContrast);
+      html.classList.toggle("high-contrast-bw", colorBlindMode === "bw");
       html.classList.toggle("reduced-motion", reducedMotion);
-      html.setAttribute("data-cb", colorBlindMode);
+      html.setAttribute("data-cb", colorBlindMode === "bw" ? "none" : colorBlindMode);
       const root = html.style;
       if (fontFamily === "serif") {
         root.setProperty("--font-serif-display-active", "var(--font-serif-display), Georgia, serif");
       } else if (fontFamily === "sans") {
         root.setProperty("--font-serif-display-active", "var(--font-geist-sans), system-ui, sans-serif");
+      } else if (fontFamily === "lexend") {
+        root.setProperty("--font-serif-display-active", "var(--font-lexend), system-ui, sans-serif");
+      } else if (fontFamily === "atkinson") {
+        root.setProperty("--font-serif-display-active", "var(--font-atkinson), system-ui, sans-serif");
       } else {
         root.setProperty("--font-serif-display-active", "Georgia, 'Times New Roman', serif");
       }
@@ -147,12 +152,13 @@ export default function Page() {
         }}
         onShowLegend={onShowLegend}
       />
-      <div className="flex-1 flex min-h-0">
-        {/* Left sidebar */}
+      <div className="flex-1 flex min-h-0 relative">
+        {/* Left sidebar — fixed overlay on mobile, inline on desktop */}
         <aside
           className={cn(
-            "border-r bg-sidebar/60 shrink-0 transition-all overflow-hidden",
-            leftOpen ? "w-64" : "w-0",
+            "border-r bg-sidebar/95 backdrop-blur-sm transition-all overflow-hidden z-20",
+            "max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:top-[49px] max-md:bottom-0 max-md:shadow-xl",
+            leftOpen ? "w-full max-w-64" : "w-0 max-md:max-w-0",
           )}
           aria-label="Chapter list"
           aria-hidden={!leftOpen}
@@ -160,16 +166,26 @@ export default function Page() {
           {leftOpen && <ChapterList />}
         </aside>
 
+        {/* Overlay backdrop for mobile when left panel is open */}
+        {leftOpen && (
+          <div
+            className="md:hidden fixed inset-0 top-[49px] bg-black/30 z-10"
+            onClick={() => setLeftOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Main reading area */}
         <main className="flex-1 min-w-0 flex flex-col">
           <Reader onBlockSelect={handleBlockSelect} />
         </main>
 
-        {/* Right sidebar */}
+        {/* Right sidebar — fixed overlay on mobile, inline on desktop */}
         <aside
           className={cn(
-            "border-l bg-sidebar/60 shrink-0 transition-all overflow-hidden",
-            effectiveRightPanel !== null ? "w-80" : "w-0",
+            "border-l bg-sidebar/95 backdrop-blur-sm transition-all overflow-hidden z-20",
+            "max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:top-[49px] max-md:bottom-0 max-md:shadow-xl",
+            effectiveRightPanel !== null ? "w-full max-w-80" : "w-0 max-md:max-w-0",
           )}
           aria-label="Detail panel"
         >
@@ -194,6 +210,18 @@ export default function Page() {
             <BookmarksPanel onJump={handleJumpFromSearch} />
           )}
         </aside>
+
+        {/* Overlay backdrop for mobile when right panel is open */}
+        {effectiveRightPanel !== null && (
+          <div
+            className="md:hidden fixed inset-0 top-[49px] bg-black/30 z-10"
+            onClick={() => {
+              setRightOpen(false);
+              setRightPanelTarget(null);
+            }}
+            aria-hidden="true"
+          />
+        )}
       </div>
       {/* Footer (sticky bottom) */}
       <footer className="border-t px-3 py-1.5 text-[10px] text-muted-foreground flex items-center justify-between bg-background">

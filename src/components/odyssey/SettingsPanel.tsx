@@ -58,14 +58,16 @@ export function SettingsPanel() {
           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Font</Label>
           <Select
             value={reader.fontFamily}
-            onValueChange={(v) => setReaderPref("fontFamily", v as "serif" | "sans" | "wenkai")}
+            onValueChange={(v) => setReaderPref("fontFamily", v as "serif" | "sans" | "wenkai" | "lexend" | "atkinson")}
           >
             <SelectTrigger className="h-8 text-xs mt-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="serif">Cormorant (serif)</SelectItem>
-              <SelectItem value="sans">Geist (sans)</SelectItem>
+              <SelectItem value="serif">Cormorant (classic serif)</SelectItem>
+              <SelectItem value="sans">Geist (clean sans)</SelectItem>
+              <SelectItem value="lexend">Lexend (reading proficiency)</SelectItem>
+              <SelectItem value="atkinson">Atkinson Hyperlegible (low vision)</SelectItem>
               <SelectItem value="wenkai">System serif fallback</SelectItem>
             </SelectContent>
           </Select>
@@ -82,8 +84,8 @@ export function SettingsPanel() {
           <Slider
             value={[reader.fontSize]}
             onValueChange={([v]) => setReaderPref("fontSize", v)}
-            min={14}
-            max={26}
+            min={12}
+            max={32}
             step={1}
             className="mt-2"
             aria-label="Font size"
@@ -143,6 +145,15 @@ export function SettingsPanel() {
           </div>
 
           <div className="flex items-center justify-between">
+            <Label htmlFor="bw" className="text-xs">Black & white (pure)</Label>
+            <Switch
+              id="bw"
+              checked={reader.colorBlindMode === "bw"}
+              onCheckedChange={(v) => setReaderPref("colorBlindMode", v ? "bw" : "none")}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
             <Label htmlFor="rm" className="text-xs">Reduced motion</Label>
             <Switch
               id="rm"
@@ -173,13 +184,14 @@ export function SettingsPanel() {
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Color-blind palette</Label>
             <Select
               value={reader.colorBlindMode}
-              onValueChange={(v) => setReaderPref("colorBlindMode", v as "none" | "protanopia" | "deuteranopia" | "tritanopia")}
+              onValueChange={(v) => setReaderPref("colorBlindMode", v as "none" | "protanopia" | "deuteranopia" | "tritanopia" | "bw")}
             >
               <SelectTrigger className="h-8 text-xs mt-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
+                <SelectItem value="bw">Black & white (pure)</SelectItem>
                 <SelectItem value="protanopia">Protanopia (red-blind)</SelectItem>
                 <SelectItem value="deuteranopia">Deuteranopia (green-blind)</SelectItem>
                 <SelectItem value="tritanopia">Tritanopia (blue-blind)</SelectItem>

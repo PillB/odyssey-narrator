@@ -164,6 +164,51 @@
 }
 
 /* ============================================================
+ * Mobile touch targets — ensure 44px minimum on interactive elements
+ * ============================================================ */
+@media (max-width: 768px) {
+  button, [role="button"], a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Exception: small inline badges and toggles */
+  .odyssey-prose button, div[role="group"] button {
+    min-height: auto;
+    min-width: auto;
+  }
+}
+
+/* ============================================================
+ * High contrast B/W mode — pure black on white for maximum legibility
+ * ============================================================ */
+.high-contrast-bw {
+  --background: oklch(1 0 0) !important;
+  --foreground: oklch(0 0 0) !important;
+  --card: oklch(1 0 0) !important;
+  --card-foreground: oklch(0 0 0) !important;
+  --muted: oklch(0.95 0 0) !important;
+  --muted-foreground: oklch(0.1 0 0) !important;
+  --border: oklch(0 0 0) !important;
+  --primary: oklch(0 0 0) !important;
+  --primary-foreground: oklch(1 0 0) !important;
+  --accent: oklch(0.9 0 0) !important;
+  --sidebar: oklch(0.97 0 0) !important;
+  --odyssey-ornament-color: oklch(0 0 0) !important;
+}
+.dark.high-contrast-bw {
+  --background: oklch(0 0 0) !important;
+  --foreground: oklch(1 0 0) !important;
+  --card: oklch(0 0 0) !important;
+  --card-foreground: oklch(1 0 0) !important;
+  --muted: oklch(0.1 0 0) !important;
+  --muted-foreground: oklch(0.9 0 0) !important;
+  --border: oklch(1 0 0) !important;
+  --primary: oklch(1 0 0) !important;
+  --primary-foreground: oklch(0 0 0) !important;
+  --odyssey-ornament-color: oklch(1 0 0) !important;
+}
+
+/* ============================================================
  * Color-blind palettes — applied via data-cb attribute on <html>
  * =================================== */
 [data-cb="protanopia"] .narrator-border,

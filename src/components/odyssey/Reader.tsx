@@ -203,7 +203,7 @@ export function Reader({ onBlockSelect }: ReaderProps) {
 
   return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto odyssey-scroll" role="main">
-      <article className="mx-auto px-5 md:px-8 py-10 md:py-14" style={{ maxWidth: "var(--odyssey-prose-max-width)" }}>
+      <article className="mx-auto px-4 sm:px-5 md:px-8 py-8 md:py-14" style={{ maxWidth: "var(--odyssey-prose-max-width)" }}>
         {groups.map((g) => {
           if (g.type === "visible") {
             return (
