@@ -7,8 +7,10 @@
 
 /** A canonical list of well-known Odyssey speakers, used to canonicalize
  *  parsed speaker names (so "Athena", "she said", "the goddess said" all
- *  resolve to the same narrator id when context allows). */
+ *  resolve to the same narrator id when context allows).
+ *  Includes BOTH English and Spanish (LATAM) name variants. */
 const KNOWN_SPEAKERS: Record<string, string> = {
+  // English names
   zeus: "Zeus",
   athena: "Athena",
   poseidon: "Poseidon",
@@ -60,6 +62,62 @@ const KNOWN_SPEAKERS: Record<string, string> = {
   autonoe: "Autonoe",
   dolius: "Dolius",
   laertes: "Laertes",
+  // Spanish (LATAM) name variants — map to the same canonical English names
+  atenea: "Athena",
+  odiseo: "Odysseus",
+  telémaco: "Telemachus",
+  telemauco: "Telemachus", // common misspelling
+  penélope: "Penelope",
+  posesidón: "Poseidon",
+  poseidón: "Poseidon",
+  hermes: "Hermes", // same in both
+  apolo: "Apollo",
+  calipso: "Calypso",
+  circe: "Circe", // same in both
+  nausícaa: "Nausicaa",
+  alcínoo: "Alcinous",
+  arete: "Arete", // same in both
+  eumeo: "Eumaeus",
+  euriclea: "Eurycleia",
+  euríloco: "Eurylochus",
+  eurímaco: "Eurymachus",
+  antínoo: "Antinous",
+  polífemo: "Polyphemus",
+  polifemo: "Polyphemus",
+  tirsesias: "Teiresias",
+  elpénor: "Elpenor",
+  anticlea: "Anticlea",
+  femio: "Phemius",
+  médon: "Medon",
+  méntor: "Mentor",
+  mentes: "Mentes",
+  haliterses: "Halitherses",
+  egipcio: "Aegyptius",
+  agelao: "Agelaus",
+  amfínomos: "Amphinomus",
+  anfínomos: "Amphinomus",
+  leocrito: "Leocritus",
+  leodes: "Leodes",
+  teoclímeno: "Theoclymenus",
+  pireo: "Piraeus",
+  noemón: "Noemon",
+  peisístrato: "Peisistratus",
+  pisístrato: "Peisistratus",
+  ctésipo: "Ctesippus",
+  polibo: "Polybus",
+  autónoe: "Autonoe",
+  dolio: "Dolius",
+  laertes: "Laertes", // same in both
+  néstor: "Nestor",
+  menelao: "Menelaus",
+  helena: "Helen",
+  agamenón: "Agamemnon",
+  egisto: "Aegisthus",
+  clitemnestra: "Clytemnestra",
+  orestes: "Orestes", // same in both
+  melantio: "Melanthius",
+  mélanto: "Melantho",
+  melanto: "Melantho",
 };
 
 /** Pronouns / articles / common verbs that should never be treated as

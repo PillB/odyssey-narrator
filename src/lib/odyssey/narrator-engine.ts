@@ -80,15 +80,35 @@ function parseSpeaker(raw: string): string | undefined {
   }
   // Pattern 5 (NEW): "Foo." Name [any verb] — catches mid-paragraph
   // attribution like `"Child, what a thing to say." Zeus looked genuinely
-  // startled. "How could I ever forget Odysseus?"`. After the closing quote,
-  // a capitalized proper noun appears before any lowercase word.
+  // startled. "How could I ever forget Odysseus?"`. After the closing quote
+  // (optionally followed by a period, comma, or exclamation — Spanish puts
+  // the period OUTSIDE the quotes: "dices". Zeus), a capitalized proper noun
+  // appears before any lowercase word.
   // Uses the strict canonicalizer so we only accept KNOWN speakers —
   // otherwise we'd false-positive on sentence-initial adverbs like
   // "Listen", "Take", "Apparently", etc.
-  m = raw.match(/[""']\s*([A-Z][a-zA-Z]{2,})\s+(?:[a-z]+)/);
+  m = raw.match(/[""'][.!]?\s*([A-Z][a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,})\s+(?:[a-z]+)/);
   if (m) {
     const canon = canonicalizeKnownSpeaker(m[1]);
     if (canon) return canon;
+  }
+  // Pattern 6 (Spanish): "..." dijo Name  /  "..." gritó Name / etc.
+  // Spanish attribution: verb comes BEFORE the name (opposite of English).
+  m = raw.match(/[""']\s*[,\-—]?\s*(?:dijo|grit[oó]|pregunt[oó]|respondi[oó]|replic[oó]|susurr[oó]|exclam[oó]|comenz[oó]|continu[oó]|a[nñ]adi[oó]|observ[oó])\s+([A-Z][a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,})/);
+  if (m) {
+    const canon = canonicalizeKnownSpeaker(m[1]);
+    if (canon) return canon;
+    // Also try the permissive canonicalizer for unknown but valid names
+    const canon2 = canonicalizeSpeaker(m[1]);
+    if (canon2) return canon2;
+  }
+  // Pattern 7 (Spanish): Name dijo, "..."
+  m = raw.match(/^([A-Z][a-zA-ZáéíóúñÁÉÍÓÚÑ]{2,})\s+(?:dijo|grit[oó]|pregunt[oó]|respondi[oó]|replic[oó]|susurr[oó]|exclam[oó]|comenz[oó]|continu[oó]|a[nñ]adi[oó]|observ[oó]),?\s+[""']/);
+  if (m) {
+    const canon = canonicalizeKnownSpeaker(m[1]);
+    if (canon) return canon;
+    const canon2 = canonicalizeSpeaker(m[1]);
+    if (canon2) return canon2;
   }
   return undefined;
 }
@@ -133,21 +153,26 @@ function detectPronounAttribution(raw: string): "he" | "she" | "they" | undefine
 }
 
 /**
- * Scan a narration paragraph for the most-recently-mentioned known character.
+ * Scan a narration paragraph for the FIRST mentioned known character.
  * Used to resolve pronoun-attributed dialogue ("he said" → which "he"?).
  * Returns the canonical name, or undefined if no character is mentioned.
  * Uses the strict canonicalizer so we don't pick up random proper nouns
  * (place names, etc.) as characters.
+ *
+ * NOTE: We return the FIRST mention, not the last, because the first
+ * character mentioned in a paragraph is typically the SUBJECT (the one
+ * the paragraph is about). For example, in "Now I must tell you about
+ * Athena... Odysseus was her particular favourite", Athena is the
+ * subject even though Odysseus is mentioned last.
  */
 function findLastMentionedCharacter(text: string): string | undefined {
-  const matches = text.match(/\b([A-Z][a-zA-Z]+)\b/g);
+  const matches = text.match(/\b([A-Z][a-zA-ZáéíóúñÁÉÍÓÚÑ]+)\b/g);
   if (!matches) return undefined;
-  let last: string | undefined;
   for (const m of matches) {
     const canon = canonicalizeKnownSpeaker(m);
-    if (canon) last = canon;
+    if (canon) return canon; // return FIRST match
   }
-  return last;
+  return undefined;
 }
 
 /** Convert a speaker name to a stable narrator id slug. (re-export) */
