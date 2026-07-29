@@ -96,12 +96,40 @@ function parseSpeaker(raw: string): string | undefined {
 /**
  * Detect pronoun attribution in a dialogue paragraph: `"Foo," he said` etc.
  * Returns the pronoun ("he", "she", "they") or undefined.
+ * Handles both English ("he said", "she said") and Spanish ("dijo él",
+ * "dijo ella", or bare verb "dijo" where subject is implied).
  */
 function detectPronounAttribution(raw: string): "he" | "she" | "they" | undefined {
-  // After a closing quote, look for "he said" / "she said" / "they said" etc.
-  const m = raw.match(/[""']\s*[,\-—]?\s*(he|she|they)\s+(?:said|cried|asked|answered|replied|whispered|shouted|began|continued|added|remarked|observed)\b/i);
-  if (!m) return undefined;
-  return m[1].toLowerCase() as "he" | "she" | "they";
+  // English: "..." he/she/they said/cried/asked/...
+  const enM = raw.match(/[""']\s*[,\-—]?\s*(he|she|they)\s+(?:said|cried|asked|answered|replied|whispered|shouted|began|continued|added|remarked|observed)\b/i);
+  if (enM) return enM[1].toLowerCase() as "he" | "she" | "they";
+
+  // Spanish: "..." dijo él/ella/ellos  OR  "..." él/ella dijo
+  const esM1 = raw.match(/[""']\s*[,\-—]?\s*(?:dijo|grit[oó]|pregunt[oó]|respondi[oó]|replic[oó]|susurr[oó]|exclam[oó]|comenz[oó]|continu[oó]|a[nñ]adi[oó]|observ[oó])\s*,?\s*(él|ella|ellos|ellas)\b/i);
+  if (esM1) {
+    const pron = esM1[1].toLowerCase();
+    if (pron === "él") return "he";
+    if (pron === "ella") return "she";
+    return "they";
+  }
+
+  // Spanish: "..." él/ella dijo
+  const esM2 = raw.match(/[""']\s*[,\-—]?\s*(él|ella|ellos|ellas)\s+(?:dijo|grit[oó]|pregunt[oó]|respondi[oó]|replic[oó]|susurr[oó]|exclam[oó]|comenz[oó]|continu[oó]|a[nñ]adi[oó]|observ[oó])\b/i);
+  if (esM2) {
+    const pron = esM2[1].toLowerCase();
+    if (pron === "él") return "he";
+    if (pron === "ella") return "she";
+    return "they";
+  }
+
+  // Spanish bare verb (no explicit pronoun): "..." dijo, sin dirigirse...
+  // This is common in Spanish prose — the subject is implied by context.
+  // We return "he" as a default since most speakers in the Odyssey are male;
+  // the context resolution will still pick the right character from narration.
+  const esBare = raw.match(/[""']\s*,?\s*(?:dijo|grit[oó]|pregunt[oó]|respondi[oó]|replic[oó]|susurr[oó]|exclam[oó]|comenz[oó]|continu[oó]|a[nñ]adi[oó]|observ[oó])\s*[,\.]/i);
+  if (esBare) return "he"; // default; context resolution handles the actual speaker
+
+  return undefined;
 }
 
 /**

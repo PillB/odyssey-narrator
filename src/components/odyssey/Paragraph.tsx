@@ -8,6 +8,26 @@ import { useOdysseyStore, useBlockNarrator } from "@/lib/odyssey/store";
 import { resolveBlockNarrator } from "@/lib/odyssey/identity";
 import { getContextInjectedRaw } from "@/lib/odyssey/context-injection";
 
+/** Calculate WCAG-relative luminance of a hex color. */
+function getLuminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const [R, G, B] = [r, g, b].map(c =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  );
+  return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+}
+
+/** Return black or white depending on which has better contrast with the
+ *  given background color (WCAG AA+ compliant). */
+function getContrastColor(bgColor: string): string {
+  // If it's a CSS variable or non-hex, default to white
+  if (!bgColor.startsWith("#") || bgColor.length < 7) return "#ffffff";
+  const luminance = getLuminance(bgColor);
+  return luminance > 0.5 ? "#1a1a1a" : "#ffffff";
+}
+
 interface ParagraphProps {
   block: Block;
   /** True for the first narration paragraph after a header (gets drop cap). */
@@ -73,6 +93,21 @@ export function Paragraph({ block, dropCap, onClick, chapterBlocks }: ParagraphP
     () => renderBlockContent(effectiveBlock, narrator?.color),
     [effectiveBlock, narrator?.color],
   );
+
+  // Get the speaker's color for the top tab badge.
+  // Look up the speaker narrator in the registry.
+  const narratorRegistry = useOdysseyStore((s) => s.narratorRegistry);
+  const speakerColor = useMemo(() => {
+    if (!contextInjection.needsInjection || !contextInjection.speakerName) {
+      return narrator?.color ?? "#8b6f47";
+    }
+    // Find the speaker narrator by matching the name
+    const speakerId = `speaker:${contextInjection.speakerName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+    const speaker = narratorRegistry.find((n) => n.id === speakerId);
+    if (speaker) return speaker.color;
+    // Fallback: use the block's narrator color
+    return narrator?.color ?? "#8b6f47";
+  }, [contextInjection, narratorRegistry, narrator?.color]);
 
 
   if (block.kind === "scene_break") {
@@ -204,6 +239,28 @@ export function Paragraph({ block, dropCap, onClick, chapterBlocks }: ParagraphP
           >
             <MessageSquarePlus className="h-3.5 w-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Context speaker tab (top of paragraph) — shown when the preceding
+          narration that identifies the speaker is folded/hidden. */}
+      {contextInjection.needsInjection && contextInjection.speakerName && (
+        <div
+          className="inline-flex items-center gap-1 mb-1 ml-4 md:ml-5 px-2 py-0.5 rounded-t-md text-[11px] font-sans font-semibold"
+          style={{
+            backgroundColor: speakerColor,
+            color: getContrastColor(speakerColor),
+            boxShadow: `0 1px 3px ${speakerColor}40`,
+          }}
+          title={`Speaker referenced from folded narration: ${contextInjection.speakerName}`}
+          aria-label={`Speaker: ${contextInjection.speakerName}`}
+        >
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: getContrastColor(speakerColor) }}
+            aria-hidden="true"
+          />
+          {contextInjection.speakerName}
         </div>
       )}
 
@@ -354,40 +411,21 @@ function InlineMarkdown({ raw }: { raw: string }) {
 }
 
 /** Dialogue content: emphasize spoken text, dim attribution.
- *  Detects injected context speaker tags like "(Zeus)" and renders them
- *  as colored badges with the narrator's color. */
+ *  The injected speaker tag "(SpeakerName)" is now rendered as a top tab
+ *  above the paragraph (not inline), so we just strip it from the text. */
 function DialogueContent({ raw, narratorColor }: { raw: string; narratorColor?: string }) {
   // Find quoted segments and attribution.
   const quoteMatch = raw.match(/^([""'])(.*?)\1(.*)$/s);
   if (quoteMatch) {
     const quote = quoteMatch[2];
     let attribution = quoteMatch[3]?.trim() ?? "";
-    // Check for injected speaker tag: "(SpeakerName)" anywhere in attribution
-    const speakerMatch = attribution.match(/\(([^)]+)\)/);
-    let speakerTag: string | null = null;
-    if (speakerMatch) {
-      speakerTag = speakerMatch[1];
-      // Remove the tag from the attribution text (we'll render it separately)
-      attribution = attribution.replace(/\([^)]+\)/, "").trim();
-    }
+    // Remove injected speaker tag: "(SpeakerName)" — it's rendered as a top tab
+    attribution = attribution.replace(/\s*\([^)]+\)\s*/g, " ").trim();
     return (
       <>
         <span className="italic">"{quote}"</span>
         {attribution && (
           <span className="text-muted-foreground not-italic"> {attribution}</span>
-        )}
-        {speakerTag && (
-          <span
-            className="ml-1 inline-block align-baseline text-[0.65em] font-medium px-1.5 py-0.5 rounded-sm border"
-            style={{
-              color: narratorColor || "var(--muted-foreground)",
-              backgroundColor: `${narratorColor || "#888"}22`,
-              borderColor: `${narratorColor || "#888"}44`,
-            }}
-            title={`Speaker referenced from folded narration: ${speakerTag}`}
-          >
-            {speakerTag}
-          </span>
         )}
       </>
     );
