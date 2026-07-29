@@ -8,6 +8,7 @@ import { Reader } from "@/components/odyssey/Reader";
 import { NarratorLegend } from "@/components/odyssey/NarratorLegend";
 import { EditorPanel } from "@/components/odyssey/EditorPanel";
 import { SettingsPanel } from "@/components/odyssey/SettingsPanel";
+import { Tour } from "@/components/odyssey/Tour";
 import { SearchPanel } from "@/components/odyssey/SearchPanel";
 import { BookmarksPanel } from "@/components/odyssey/BookmarksPanel";
 import type { Block } from "@/lib/odyssey/types";
@@ -235,6 +236,9 @@ export default function Page() {
         </span>
         <span>The AI Odyssey · Reader v1</span>
       </footer>
+
+      {/* Interactive onboarding tour (auto-starts on first visit) */}
+      <Tour />
     </div>
   );
 }

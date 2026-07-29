@@ -1,7 +1,8 @@
 "use client";
 
-import { Moon, Sun, Monitor, Type, Eye, Accessibility, RotateCcw } from "lucide-react";
+import { Moon, Sun, Monitor, Type, Eye, Accessibility, RotateCcw, Compass } from "lucide-react";
 import { useOdysseyStore } from "@/lib/odyssey/store";
+import { replayTour } from "@/components/odyssey/Tour";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -22,6 +23,18 @@ export function SettingsPanel() {
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-5 odyssey-scroll">
+        {/* Replay tour */}
+        <section>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full h-8 text-xs"
+            onClick={() => replayTour()}
+          >
+            <Compass className="h-3.5 w-3.5 mr-1.5" /> Replay interactive tour
+          </Button>
+        </section>
+
         {/* Theme */}
         <section>
           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Theme</Label>
