@@ -115,6 +115,8 @@ export default function Page() {
     if (on) {
       setRightOpen(true);
       setRightPanelTarget("editor");
+      // On mobile, close left panel to avoid overlap
+      if (window.innerWidth < 768) setLeftOpen(false);
     }
   };
 
@@ -123,6 +125,8 @@ export default function Page() {
   // - If panel is open showing legend → close it
   // - If panel is open showing something else → switch to legend
   const onShowLegend = () => {
+    // On mobile, close left panel when opening right
+    if (window.innerWidth < 768) setLeftOpen(false);
     if (!rightOpen) {
       setRightOpen(true);
       setRightPanelTarget("legend");
@@ -138,16 +142,26 @@ export default function Page() {
       <Toolbar
         leftSidebarOpen={leftOpen}
         rightSidebarOpen={rightOpen}
-        onToggleLeft={() => setLeftOpen((v) => !v)}
+        onToggleLeft={() => {
+          // On mobile, close right panel when opening left
+          if (window.innerWidth < 768 && !leftOpen) {
+            setRightOpen(false);
+            setRightPanelTarget(null);
+          }
+          setLeftOpen((v) => !v);
+        }}
         onOpenSettings={() => {
+          if (window.innerWidth < 768) setLeftOpen(false);
           setRightOpen(true);
           setRightPanelTarget("settings");
         }}
         onOpenSearch={() => {
+          if (window.innerWidth < 768) setLeftOpen(false);
           setRightOpen(true);
           setRightPanelTarget("search");
         }}
         onOpenBookmarks={() => {
+          if (window.innerWidth < 768) setLeftOpen(false);
           setRightOpen(true);
           setRightPanelTarget("bookmarks");
         }}
